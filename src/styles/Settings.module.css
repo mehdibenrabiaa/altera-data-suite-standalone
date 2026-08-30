@@ -1,0 +1,418 @@
+* {
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+/* Allow selection in form elements */
+input,
+textarea,
+[contenteditable="true"] {
+  user-select: text;
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+}
+
+.settingsRoot {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #f5f5f5;
+  font-family: "Google Sans Flex", sans-serif;
+}
+
+/* Flex item needs an explicit min-height override -- otherwise a flex child
+   refuses to shrink below its content's natural height, so the "height:
+   100%" constraint from .settingsRoot never actually reaches the tab
+   content, and overflow silently clips (via html/body/#root's
+   overflow:hidden) instead of scrolling. */
+.customTabs {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Tab bar — flat, matches header-promoter's .dock-bar/.dock-tab ── */
+.customTabs :global(.ant-tabs-nav) {
+  margin-bottom: 0 !important;
+  flex-shrink: 0;
+  background: #f5f5f5 !important;
+  border-bottom: 1px solid #e0e0e0 !important;
+  padding: 0 20px !important;
+}
+
+.customTabs :global(.ant-tabs-tab) {
+  padding: 8px 4px !important;
+  margin: 0 16px 0 0 !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  color: #555555 !important;
+  transition: none !important;
+}
+
+.customTabs :global(.ant-tabs-tab:hover) {
+  color: #1a1a1a !important;
+}
+
+.customTabs :global(.ant-tabs-tab-active .ant-tabs-tab-btn) {
+  color: #FE4D41 !important;
+  font-weight: 600 !important;
+}
+
+.customTabs :global(.ant-tabs-ink-bar) {
+  background: #FE4D41 !important;
+  height: 2px !important;
+}
+
+.customTabs :global(.ant-tabs-body-holder) {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px;
+  background: #f5f5f5;
+}
+
+.customTabs :global(.ant-tabs-content) {
+  height: 100%;
+}
+
+.customTabs :global(.ant-tabs-tabpane) {
+  height: 100%;
+  overflow-y: auto;
+}
+
+/* ── Section card — flat, matches .properties-info-box / .op-card ── */
+.sectionCard {
+  border: 1px solid #e0e0e0 !important;
+  border-radius: 0 !important;
+  margin-bottom: 12px !important;
+  box-shadow: none !important;
+  overflow: hidden;
+}
+
+.sectionCard :global(.ant-card-head) {
+  min-height: auto;
+  padding: 8px 12px;
+  border-bottom: 1px solid #e0e0e0;
+  background: #f0f0f0;
+}
+
+.sectionCard :global(.ant-card-head-title) {
+  padding: 0;
+}
+
+.sectionCard :global(.ant-card-body) {
+  padding: 2px 0;
+  background: #ffffff;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sectionIcon {
+  color: #555555;
+  font-size: 12px;
+}
+
+.sectionTitle {
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  color: #555555 !important;
+}
+
+/* ── Setting row ────────────────────────────────── */
+.settingRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  gap: 16px;
+  border-bottom: 1px solid #f0f0f0;
+  transition: none;
+}
+
+.settingRow:last-child {
+  border-bottom: none;
+}
+
+.settingLabel {
+  font-size: 12px !important;
+  color: #1a1a1a !important;
+  font-weight: 500 !important;
+}
+
+.settingDesc {
+  font-size: 11px;
+  color: #999999;
+  margin-top: 1px;
+}
+
+/* ── Slider ─────────────────────────────────────── */
+.sliderValue {
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: #555555;
+  min-width: 32px;
+  text-align: right;
+}
+
+/* ── Select ─────────────────────────────────────── */
+.styledSelect {
+  min-width: 130px;
+}
+
+/* ── Accent color swatch ──────────────────────────── */
+.swatchRow {
+  display: flex;
+  gap: 8px;
+}
+
+.swatch {
+  width: 20px;
+  height: 20px;
+  border-radius: 0;
+  border: 1px solid #cccccc;
+  cursor: pointer;
+}
+
+.activeSwatch {
+  border: 2px solid #FE4D41;
+}
+
+/* ── Hero banner (About tab) — flat, no gradient ── */
+.heroBanner {
+  background: #FE4D41;
+  border: 1px solid #FE4D41;
+  padding: 28px 16px;
+  margin: 0 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.heroLogo {
+  height: 40px;
+  flex-shrink: 0;
+}
+
+.heroName {
+  font-size: 25px;
+  font-weight: 600;
+  color: #ffffff;
+  line-height: 1.1;
+}
+
+.heroTagline {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.85);
+  margin-top: 0;
+}
+
+/* ── License state banner (Activation tab) ────────
+   Flat colored strip, matches cleaner's .warn-banner / .op-card-missing
+   pattern -- tinted background + left accent stripe, no gradients. ── */
+.stateBanner {
+  padding: 18px 18px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  border: 1px solid;
+  border-left-width: 3px;
+}
+
+.stateBanner--danger  { background: #fdf2f2; border-color: #f3c6c6; border-left-color: #c0392b; }
+.stateBanner--warning { background: #f8f5ee; border-color: #ddd0b3; border-left-color: #b8860b; }
+.stateBanner--success { background: #f2f8f3; border-color: #c6e0c9; border-left-color: #2e7d32; }
+.stateBanner--trial    { background: #fdf6ee; border-color: #e6d2b3; border-left-color: #b8722a; }
+
+.stateBannerIcon {
+  font-size: 26px;
+  flex-shrink: 0;
+}
+.stateBanner--danger  .stateBannerIcon { color: #c0392b; }
+.stateBanner--warning .stateBannerIcon { color: #b8860b; }
+.stateBanner--success .stateBannerIcon { color: #2e7d32; }
+.stateBanner--trial    .stateBannerIcon { color: #b8722a; }
+
+.stateBannerTitle {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 5px;
+}
+
+.stateBannerDesc {
+  font-size: 12px;
+  color: #555555;
+  line-height: 1.8;
+}
+.stateBannerDesc strong { color: #1a1a1a; }
+
+/* Flat day-count badge, matches header-promoter's .hp-row-badge */
+.stateBadge {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+  margin-left: 8px;
+  vertical-align: middle;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid;
+}
+.stateBadge--urgent { background: #fdf2f2; border-color: #f3c6c6; color: #c0392b; }
+.stateBadge--normal { background: #ffffff; border-color: #e0e0e0; color: #555555; }
+
+/* Secondary notice strip below the hero banner */
+.noticeRow {
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  border-bottom: 1px solid;
+}
+.noticeRow--danger  { background: #fdf2f2; color: #c0392b; border-color: #f3c6c6; }
+.noticeRow--warning { background: #f8f5ee; color: #8a6d1f; border-color: #ddd0b3; }
+.noticeRow--success  { background: #f2f8f3; color: #2e7d32; border-color: #c6e0c9; }
+
+/* ── Activation form body ─────────────────────────── */
+.activationBody {
+  padding: 16px;
+}
+
+.activationLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 6px;
+}
+
+.feedbackMsg {
+  font-size: 11px;
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 16px;
+}
+.feedbackMsg.error   { color: #c0392b; }
+.feedbackMsg.success { color: #2e7d32; }
+
+.helpText {
+  margin-top: 8px;
+  font-size: 11px;
+  color: #999999;
+}
+.helpText a, .helpText a:hover, .helpText a:visited { color: #FE4D41; }
+
+/* ── Machine ID box — flat, matches .dedup-info-box ── */
+.machineIdSection {
+  border-top: 1px solid #e0e0e0;
+  padding: 12px 16px;
+}
+
+.machineIdLabel {
+  font-size: 11px;
+  color: #999999;
+  margin-bottom: 6px;
+}
+
+.machineIdBox {
+  background: #f0f0f0;
+  border: 1px solid #e0e0e0;
+  border-radius: 0;
+  padding: 6px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.machineIdVal {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  color: #555555;
+  word-break: break-all;
+}
+
+/* ── About: system info / links ──────────────────── */
+.infoRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 12px;
+}
+
+.infoRow:last-child {
+  border-bottom: none;
+}
+
+.infoLabel {
+  color: #555555;
+}
+
+.infoValue {
+  color: #1a1a1a;
+  font-weight: 500;
+}
+
+.infoValue.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+}
+
+.linkRow,
+.linkRow:visited {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 12px;
+  color: #FE4D41;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.linkRow:last-child {
+  border-bottom: none;
+}
+
+.linkRow:hover {
+  background: #fff5f5;
+  color: #FE4D41;
+}
+
+.copyright {
+  text-align: center;
+  padding: 16px 0 4px;
+  font-size: 11px;
+  color: #999999;
+}
+
+/* ── Scrollbar ─────────────────────────────────── */
+.customTabs :global(.ant-tabs-body-holder)::-webkit-scrollbar {
+  width: 8px;
+}
+
+.customTabs :global(.ant-tabs-body-holder)::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.customTabs :global(.ant-tabs-body-holder)::-webkit-scrollbar-thumb {
+  background: #bbbbbb;
+}
+
+.customTabs :global(.ant-tabs-body-holder)::-webkit-scrollbar-thumb:hover {
+  background: #888888;
+}

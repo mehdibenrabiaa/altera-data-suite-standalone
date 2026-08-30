@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+pydantic
+pymupdf
+camelot-py
+pypdfium2
+pandas
+requests
+keyring
+py-machineid
+python-jose[cryptography]

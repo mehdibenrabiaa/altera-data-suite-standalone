@@ -1,0 +1,10 @@
+node_modules
+dist
+dist-electron
+*.local
+*.log
+*.tsbuildinfo
+
+backend/.venv
+backend/__pycache__
+backend/**/__pycache__
