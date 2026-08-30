@@ -95,8 +95,8 @@ export interface DraggedNodeEntry {
 }
 
 export const NODE_CATALOG: NodeCatalogEntry[] = [
-  { name: "Excel Exporter", description: "Export one or more datasets to Excel (.xlsx) or CSV.", icon: "/node-icons/excel_exporter.svg", category: "io", hasOutput: false },
-  { name: "Browse", description: "Preview a table's rows and columns without modifying the data.", icon: "/node-icons/browse.svg", category: "io", hasOutput: false, mainInputMax: 1 },
+  { name: "Excel Exporter", description: "Export one or more datasets to Excel (.xlsx) or CSV.", icon: "./node-icons/excel_exporter.svg", category: "io", hasOutput: false },
+  { name: "Browse", description: "Preview a table's rows and columns without modifying the data.", icon: "./node-icons/browse.svg", category: "io", hasOutput: false, mainInputMax: 1 },
   // Preparation -- Alteryx's own Select tool covers exactly what Column
   // Edit and Change Type do (reorder/rename/delete columns; change a
   // column's type), and Record ID is exactly Index Column. Shift
@@ -104,22 +104,22 @@ export const NODE_CATALOG: NodeCatalogEntry[] = [
   // have no 1:1 Alteryx tool but are all single-table row/column-shape
   // or cleanup operations, the same kind of work Preparation's own
   // Multi-Row Formula/Filter/Unique/Data Cleansing tools do.
-  { name: "Column Edit", description: "Reorder, rename, and delete columns with a drag-and-drop interface.", icon: "/node-icons/column_manager.svg", category: "preparation", mainInputMax: 1 },
-  { name: "Change Type", description: "Convert a column to Number or Text, with an option to fill values that can't convert.", icon: "/node-icons/change_type.svg", category: "preparation", mainInputMax: 1 },
-  { name: "Shift Columns", description: "Shift selected columns up or down by N steps.", icon: "/node-icons/multishift.svg", category: "preparation", mainInputMax: 1 },
-  { name: "Header Promoter", description: "Promote any row in a table to become column headers.", icon: "/node-icons/header_promoter.svg", category: "preparation", mainInputMax: 1 },
-  { name: "Index Column", description: "Add a row-index column numbered 1 to N.", icon: "/node-icons/index.svg", category: "preparation", mainInputMax: 1 },
-  { name: "Filter Builder", description: "Advanced AND/OR filtering with full type preservation.", icon: "/node-icons/filter.svg", category: "preparation", hasExtraInput: true, mainInputMax: 1 },
-  { name: "Unique", description: "Remove duplicate rows based on selected columns.", icon: "/node-icons/deduplicator.svg", category: "preparation", mainInputMax: 1 },
-  { name: "Cascade Fill", description: "Fill up or fill down to propagate values vertically within columns.", icon: "/node-icons/cascade_fill.svg", category: "preparation" },
-  { name: "Cleaner", description: "Clean and transform text columns with various operations.", icon: "/node-icons/cleaner.svg", category: "preparation", mainInputMax: 1 },
+  { name: "Column Edit", description: "Reorder, rename, and delete columns with a drag-and-drop interface.", icon: "./node-icons/column_manager.svg", category: "preparation", mainInputMax: 1 },
+  { name: "Change Type", description: "Convert a column to Number or Text, with an option to fill values that can't convert.", icon: "./node-icons/change_type.svg", category: "preparation", mainInputMax: 1 },
+  { name: "Shift Columns", description: "Shift selected columns up or down by N steps.", icon: "./node-icons/multishift.svg", category: "preparation", mainInputMax: 1 },
+  { name: "Header Promoter", description: "Promote any row in a table to become column headers.", icon: "./node-icons/header_promoter.svg", category: "preparation", mainInputMax: 1 },
+  { name: "Index Column", description: "Add a row-index column numbered 1 to N.", icon: "./node-icons/index.svg", category: "preparation", mainInputMax: 1 },
+  { name: "Filter Builder", description: "Advanced AND/OR filtering with full type preservation.", icon: "./node-icons/filter.svg", category: "preparation", hasExtraInput: true, mainInputMax: 1 },
+  { name: "Unique", description: "Remove duplicate rows based on selected columns.", icon: "./node-icons/deduplicator.svg", category: "preparation", mainInputMax: 1 },
+  { name: "Cascade Fill", description: "Fill up or fill down to propagate values vertically within columns.", icon: "./node-icons/cascade_fill.svg", category: "preparation" },
+  { name: "Cleaner", description: "Clean and transform text columns with various operations.", icon: "./node-icons/cleaner.svg", category: "preparation", mainInputMax: 1 },
   // Join -- Alteryx's own Join tool is exactly Merge's "match on shared
   // columns" mode, and its Append Fields tool is exactly Horizontal
   // Stack's "combine by position" mode.
-  { name: "Horizontal Stack", description: "Combine two tables side by side, matching rows by position or a key column.", icon: "/node-icons/horizontal_stack.svg", category: "join" },
-  { name: "Merge", description: "Combine two tables by matching rows on shared columns or row position.", icon: "/node-icons/merge.svg", category: "join", hasExtraInput: true, mainInputMax: 1 },
+  { name: "Horizontal Stack", description: "Combine two tables side by side, matching rows by position or a key column.", icon: "./node-icons/horizontal_stack.svg", category: "join" },
+  { name: "Merge", description: "Combine two tables by matching rows on shared columns or row position.", icon: "./node-icons/merge.svg", category: "join", hasExtraInput: true, mainInputMax: 1 },
   // Parse -- Alteryx's own RegEx tool.
-  { name: "Regular Expressions", description: "Extract regex matches from a column, with a live match preview.", icon: "/node-icons/regex.svg", category: "parse", mainInputMax: 1 },
+  { name: "Regular Expressions", description: "Extract regex matches from a column, with a live match preview.", icon: "./node-icons/regex.svg", category: "parse", mainInputMax: 1 },
 ];
 
 export function toDraggedNodeEntry(n: NodeCatalogEntry): DraggedNodeEntry {

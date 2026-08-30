@@ -55,3 +55,46 @@ export function detectColumnType(values: string[]): DetectedColumnType {
   if (nonEmpty.every(isDateValue)) return "date";
   return "text";
 }
+
+// What a Change Type node's run result (backend/app/routers/nodes.py's
+// `columnTypes`, set from change_type's own result.attrs) reports a column
+// was ACTUALLY converted to -- "number" stays undifferentiated the same
+// way ChangeTypeTarget itself does (no separate Integer/Float target, see
+// types.ts's own comment), so resolveDisplayColumnType below is what
+// splits it back into Integer vs Float for the icon.
+export type AppliedColumnType = "number" | "float" | "date" | "text";
+
+// The one hardcoded exception to "every column defaults to Text" below --
+// unlike every other column, `Page` is never extracted/parsed FROM the PDF
+// at all: backend/app/extraction.py assigns it directly as a real Python
+// int (`df["Page"] = page_num`) on every table, for every extraction path.
+// There's no ambiguous string content to guess at here, so showing Text
+// for it (the same way an unconverted, genuinely-still-text data column
+// would) would be UNDER-stating what's actually known about it -- this
+// isn't a content guess, it's a fixed fact about how this app's own
+// backend builds that one specific column.
+const ALWAYS_INTEGER_COLUMN_NAMES = new Set(["Page"]);
+
+// The output-preview header icon (BrowseWindow.tsx/SchemaView.tsx's output
+// drawer) shows a column's REAL, current type -- never a guess from its
+// string content. Every column defaults to Text (this app's wire format
+// has no real per-column type system; a column IS text until something
+// actually converts it -- see types.ts's ChangeTypeTarget comment), and
+// only a column a Change Type node genuinely ran gets anything else, read
+// straight from `appliedType`. For "number" specifically, splitting into
+// Integer vs Float by checking isIntegerValue against these particular
+// values is still NOT guessing, unlike detectColumnType above -- these are
+// backend-formatted output (_format_number in nodes.py), not raw
+// extraction noise, so their shape is a fact about the data, not a guess.
+export function resolveDisplayColumnType(
+  columnName: string,
+  appliedType: AppliedColumnType | undefined,
+  sampleValues: string[],
+): DetectedColumnType {
+  if (ALWAYS_INTEGER_COLUMN_NAMES.has(columnName)) return "integer";
+  if (!appliedType || appliedType === "text") return "text";
+  if (appliedType === "date") return "date";
+  if (appliedType === "float") return "float";
+  const nonEmpty = sampleValues.map((v) => (v ?? "").trim()).filter((v) => v !== "");
+  return nonEmpty.length > 0 && nonEmpty.every(isIntegerValue) ? "integer" : "float";
+}

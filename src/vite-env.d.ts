@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
 
 import type { SettingsPayload, PersistedSettings, FilterBuilderParams, FilterColumnDefinition, HeaderPromoterParams, MergeParams, ShiftColumnsParams, CleanerParams, UniqueParams, ColumnEditParams, ChangeTypeParams, RegexParams } from "./types";
+import type { AppliedColumnType } from "./columnTypeDetection";
 
 // Mirrors the original devkit/filter-builder project's own ExtraColumnDef
 // (just a name today -- kept as its own type, not a bare string[], in case
@@ -29,6 +30,10 @@ export interface BrowseWindowPayload {
   nodeName: string;
   columns: string[];
   rows: string[][];
+  // Only ever present when this window's input is the direct output of a
+  // Change Type node -- see columnTypeDetection.ts's resolveDisplayColumnType
+  // for why the header icon reads this instead of re-guessing from content.
+  columnTypes?: Record<string, AppliedColumnType>;
 }
 
 // Header Promoter's Configure window needs the resolved primary input's

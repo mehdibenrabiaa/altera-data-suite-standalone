@@ -3,7 +3,7 @@ import { ConfigProvider } from "antd";
 import { AgGridReact } from "ag-grid-react";
 import { ModuleRegistry, AllCommunityModule, themeQuartz, type ColDef } from "ag-grid-community";
 import type { BrowseWindowPayload } from "./vite-env";
-import { detectColumnType, DETECTION_SAMPLE_ROWS } from "./columnTypeDetection";
+import { resolveDisplayColumnType, DETECTION_SAMPLE_ROWS } from "./columnTypeDetection";
 import { TypedColumnHeader } from "./columnTypeIcons";
 import "./App.css";
 
@@ -137,9 +137,10 @@ export default function BrowseWindow() {
   }, [payload]);
 
   // Power-Query-style type icon before each header's name (see
-  // columnTypeDetection.ts/columnTypeIcons.tsx) -- best-effort, sampled
-  // from the actual rows this window already has, capped the same way
-  // ChangeTypeWindow.tsx caps its own sample.
+  // columnTypeDetection.ts/columnTypeIcons.tsx) -- shows the column's REAL
+  // type, never a content-based guess: Text unless payload.columnTypes says
+  // otherwise (only ever set when this window's input is the direct output
+  // of a Change Type node -- see resolveDisplayColumnType's own comment).
   const columnDefs: ColDef[] = payload
     ? [
         makeRowNumberColDef(payload.rows.length),
@@ -156,7 +157,7 @@ export default function BrowseWindow() {
             // top-level ColDef field like headerComponent itself.
             headerComponentParams: {
               innerHeaderComponent: TypedColumnHeader,
-              innerHeaderComponentParams: { detectedType: detectColumnType(sample) },
+              innerHeaderComponentParams: { detectedType: resolveDisplayColumnType(col, payload.columnTypes?.[col], sample) },
             },
           };
         }),

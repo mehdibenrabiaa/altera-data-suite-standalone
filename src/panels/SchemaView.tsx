@@ -41,7 +41,7 @@ import {
   type DraggedNodeEntry,
 } from "../nodeCatalog";
 import { runProcessorNode, type NodeTableInput } from "../nodeExecution";
-import { detectColumnType, DETECTION_SAMPLE_ROWS } from "../columnTypeDetection";
+import { resolveDisplayColumnType, DETECTION_SAMPLE_ROWS, type AppliedColumnType } from "../columnTypeDetection";
 import { TypedColumnHeader } from "../columnTypeIcons";
 
 // Catalog widget names that actually have a wired-up backend transform
@@ -410,7 +410,7 @@ function TableColumnRow({ original, display, onRename }: { original: string; dis
             setEditing(true);
           }}
         >
-          <img src="/pen-line.svg" alt="" width={12} height={12} />
+          <img src="./pen-line.svg" alt="" width={12} height={12} />
         </button>
       )}
     </div>
@@ -557,13 +557,13 @@ const ProcessorNodeConfigureContext = createContext<{ onConfigure: (id: string) 
 // by .schema-processor-node-badge in App.css (18px, keep both in sync if
 // this ever changes again).
 function ErrorBadgeSvg({ title }: { title?: string }) {
-  return <img src="/alert_red.svg" title={title} alt="Error" className="schema-processor-node-badge nodrag" width={18} height={18} />;
+  return <img src="./alert_red.svg" title={title} alt="Error" className="schema-processor-node-badge nodrag" width={18} height={18} />;
 }
 function WarningBadgeSvg({ title }: { title?: string }) {
-  return <img src="/alert_yellow.svg" title={title} alt="Warning" className="schema-processor-node-badge nodrag" width={18} height={18} />;
+  return <img src="./alert_yellow.svg" title={title} alt="Warning" className="schema-processor-node-badge nodrag" width={18} height={18} />;
 }
 function InfoBadgeSvg({ title }: { title?: string }) {
-  return <img src="/alert_blue.svg" title={title} alt="Info" className="schema-processor-node-badge nodrag" width={18} height={18} />;
+  return <img src="./alert_blue.svg" title={title} alt="Info" className="schema-processor-node-badge nodrag" width={18} height={18} />;
 }
 function NodeMessageBadge({ status }: { status: ProcessorRunStatus | undefined }) {
   if (status?.state === "error") {
@@ -1754,7 +1754,7 @@ export default function SchemaView({
   // stays mounted behind CSS display:none across the Canvas<->Workflow
   // toggle specifically so this kind of local state survives).
   const [nodeRunStatus, setNodeRunStatus] = useState<Record<string, ProcessorRunStatus>>({});
-  const [nodeOutputs, setNodeOutputs] = useState<Record<string, { columns: string[]; rows: string[][] }>>({});
+  const [nodeOutputs, setNodeOutputs] = useState<Record<string, { columns: string[]; rows: string[][]; columnTypes?: Record<string, AppliedColumnType> }>>({});
 
   // Read at response time (not via the closure the request started with)
   // to check whether a node was deleted while its run was in flight.
@@ -2134,6 +2134,7 @@ export default function SchemaView({
       nodeName: proc.name || proc.catalogName,
       columns: input?.columns ?? [],
       rows: input?.rows ?? [],
+      columnTypes: input?.columnTypes,
     });
     // Tracked so the effect below keeps pushing live updates into this
     // node's (now non-modal, so it stays open during normal editing)
@@ -2163,7 +2164,7 @@ export default function SchemaView({
       const last = lastPushedBrowseInputRef.current.get(id);
       if (last && last.columns === columns && last.rows === rows) return;
       lastPushedBrowseInputRef.current.set(id, { columns, rows });
-      window.alteraStudio.pushBrowseUpdate({ nodeId: id, nodeName: proc.name || proc.catalogName, columns, rows });
+      window.alteraStudio.pushBrowseUpdate({ nodeId: id, nodeName: proc.name || proc.catalogName, columns, rows, columnTypes: input?.columnTypes });
     });
   }, [processorNodes, resolveBrowseInput]);
 
@@ -2297,7 +2298,7 @@ export default function SchemaView({
     try {
       const result = await runProcessorNode(kind, inputs, runParams);
       if (!processorNodesRef.current.some((p) => p.id === id)) return; // deleted mid-run
-      setNodeOutputs((prev) => ({ ...prev, [id]: { columns: result.columns, rows: result.rows } }));
+      setNodeOutputs((prev) => ({ ...prev, [id]: { columns: result.columns, rows: result.rows, columnTypes: result.columnTypes ?? undefined } }));
       setNodeRunStatus((prev) => ({
         ...prev,
         [id]: {
@@ -2385,7 +2386,38 @@ export default function SchemaView({
       if (!RUNNABLE_NODE_KINDS.has(proc.catalogName)) return;
       if (nodeRunStatus[proc.id]?.state === "running") return;
       const inputs = resolveNodeInputs(proc.id);
-      if (inputs.length < (NODE_MIN_INPUTS[proc.catalogName] ?? 1)) return; // not ready -- manual Run still explains why, no need to spam that here
+      if (inputs.length < (NODE_MIN_INPUTS[proc.catalogName] ?? 1)) {
+        // Mirrors handleRunProcessorNode's own "drop the last successful
+        // output" cleanup (see its comment) -- but that cleanup only runs
+        // when handleRunProcessorNode itself gets called with insufficient
+        // inputs, which a plain disconnect never does: this effect always
+        // bailed out right here, before ever enqueueing a run. Left
+        // unguarded, a node whose input got disconnected kept its stale
+        // nodeOutputs (and "done" status light) forever, and a LATER
+        // reconnect to genuinely different upstream data wouldn't
+        // necessarily re-run it either -- the signature comparison below
+        // only fires a run when it differs from whatever was cached in
+        // lastAutoRunInputsRef, and nothing here had reset that either.
+        // Reported as exactly that: reconnecting after editing an upstream
+        // node's config still showed the old, pre-disconnect data.
+        // Guarded no-ops (matching handleRunProcessorNode's own style) so
+        // a node that was simply never connected yet doesn't spam a
+        // status/output write on every unrelated re-render.
+        delete lastAutoRunInputsRef.current[proc.id];
+        const message = (NODE_MIN_INPUTS[proc.catalogName] ?? 1) > 1
+          ? `Connect at least ${NODE_MIN_INPUTS[proc.catalogName]} converted tables (run Convert first).`
+          : "Connect a converted table (run Convert first).";
+        setNodeRunStatus((prev) =>
+          prev[proc.id]?.state === "error" && prev[proc.id]?.error === message ? prev : { ...prev, [proc.id]: { state: "error", error: message } },
+        );
+        setNodeOutputs((prev) => {
+          if (!(proc.id in prev)) return prev;
+          const next = { ...prev };
+          delete next[proc.id];
+          return next;
+        });
+        return;
+      }
       const extra = proc.hasExtraInput ? resolveExtraDataInput(proc.id) : undefined;
       const signature = JSON.stringify({ inputs, extra, params: proc.params });
       if (lastAutoRunInputsRef.current[proc.id] === signature) return;
@@ -2579,6 +2611,7 @@ export default function SchemaView({
           sampleRows: input.rows,
           rowCount: input.rows.length,
           isFullData: input.isFullData,
+          columnTypes: input.columnTypes,
         };
       }
       const output = nodeOutputs[selectedProcessorNode.id];
@@ -2589,6 +2622,7 @@ export default function SchemaView({
         sampleRows: output.rows,
         rowCount: output.rows.length,
         isFullData: true as const,
+        columnTypes: output.columnTypes,
       };
     }
     if (selectedTableNodes.length !== 1) return null;
@@ -2602,13 +2636,17 @@ export default function SchemaView({
     // is exactly what convertedTables is keyed by.
     const converted = convertedTables[id];
     if (converted) {
-      return { ...preview, columns: converted.columns, sampleRows: converted.rows, rowCount: converted.rows.length, isFullData: true as const };
+      // No columnTypes here (undefined) -- a raw extracted/converted table
+      // (as opposed to a processor node's output) has never gone through
+      // an actual Change Type conversion, so its columns are genuinely
+      // still text; see resolveDisplayColumnType's own comment.
+      return { ...preview, columns: converted.columns, sampleRows: converted.rows, rowCount: converted.rows.length, isFullData: true as const, columnTypes: undefined };
     }
     // Pre-Convert sample -- same rename patch as resolveBrowseInput's own
     // fallback above (displayTables.columns stays the raw extracted names).
     const renames = rectById.get(id)?.columnRenames;
     const columns = renames ? preview.columns.map((c) => renames[c] ?? c) : preview.columns;
-    return { ...preview, columns, isFullData: false as const };
+    return { ...preview, columns, isFullData: false as const, columnTypes: undefined };
   }, [selectedProcessorNode, nodeOutputs, processorNodes, selectedTableNodes, findDisplayTableByNodeId, convertedTables, resolveBrowseInput, rectById]);
 
   // AG-Grid's own row-model diffing treats a new `rowData`/`columnDefs`
@@ -2647,10 +2685,13 @@ export default function SchemaView({
   // a full grid remount on every switch (which fixed the same bug but
   // visibly flashed/redrew the whole grid each time).
   // Power-Query-style type icon before each header's name (see
-  // columnTypeDetection.ts/columnTypeIcons.tsx), sampled from whatever
-  // rows this table already has on hand (sampleRows -- already capped,
-  // whether that's a 10-row schema-preview sample or a real Converted/run
-  // result).
+  // columnTypeDetection.ts/columnTypeIcons.tsx) -- shows the column's REAL
+  // type, never a content-based guess: Text unless a Change Type node
+  // genuinely converted this exact column (selectedTable.columnTypes,
+  // present only on a processor node's own output/a Browse window fed
+  // directly from one -- see resolveDisplayColumnType's own comment for
+  // why guessing here was actively misleading once a downstream node
+  // starts trusting this icon to mean "already numeric").
   const outputColumnDefs = useMemo(() => {
     if (!selectedTable) return null;
     return [
@@ -2663,7 +2704,7 @@ export default function SchemaView({
           colId: `${selectedTable.name}::${ci}::${col}`,
           headerComponentParams: {
             innerHeaderComponent: TypedColumnHeader,
-            innerHeaderComponentParams: { detectedType: detectColumnType(sample) },
+            innerHeaderComponentParams: { detectedType: resolveDisplayColumnType(col, selectedTable.columnTypes?.[col], sample) },
           },
         };
       }),

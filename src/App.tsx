@@ -770,7 +770,7 @@ function NodeLogPanelContainer() {
               {log.entries.map((entry, i) => (
                 <div key={i} className={`node-log-entry ${entry.type}`}>
                   <img
-                    src={entry.type === "error" ? "/alert_red.svg" : entry.type === "warning" ? "/alert_yellow.svg" : "/alert_blue.svg"}
+                    src={entry.type === "error" ? "./alert_red.svg" : entry.type === "warning" ? "./alert_yellow.svg" : "./alert_blue.svg"}
                     alt={entry.type}
                     width={14}
                     height={14}

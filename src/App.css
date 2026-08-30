@@ -446,7 +446,7 @@ button:focus-visible {
 .typed-column-header {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   min-width: 0;
 }
 .typed-column-header svg {

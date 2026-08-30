@@ -585,6 +585,13 @@ def _format_number(v: float) -> str:
     return str(int(v)) if v == int(v) else str(v)
 
 
+def _format_float(v: float) -> str:
+    # Unlike _format_number, always keeps the decimal form -- Float means
+    # "show this as a decimal even if the value happens to be whole" (e.g.
+    # a Page column deliberately converted to Float still reads "1.0").
+    return str(v)
+
+
 def _to_date_or_none(value: Any) -> "pd.Timestamp | None":
     s = str(value).strip()
     if s == "":
@@ -613,9 +620,10 @@ def change_type(dfs: list[pd.DataFrame], params: dict[str, Any]) -> tuple[pd.Dat
     info: list[str] = []
 
     to_number: list[str] = []
+    to_float: list[str] = []
     to_text: list[str] = []
     to_date: list[str] = []
-    buckets = {"number": to_number, "text": to_text, "date": to_date}
+    buckets = {"number": to_number, "float": to_float, "text": to_text, "date": to_date}
     for entry in fields:
         target = entry.get("targetType")
         if target not in buckets:
@@ -626,7 +634,7 @@ def change_type(dfs: list[pd.DataFrame], params: dict[str, Any]) -> tuple[pd.Dat
             continue
         buckets[target].append(field)
 
-    if not to_number and not to_text and not to_date:
+    if not to_number and not to_float and not to_text and not to_date:
         return df, warnings, []  # nothing configured yet -- pass through unchanged
 
     result = df.copy()
@@ -636,9 +644,10 @@ def change_type(dfs: list[pd.DataFrame], params: dict[str, Any]) -> tuple[pd.Dat
     fill = bool(params.get("fillUnconvertible", False))
     fallback = str(params.get("fallbackValue", ""))
 
-    # Number and Date share the exact same "parse everything, then either
-    # block on any failure or fill it in" policy -- only the parse/format
-    # functions and the label in the error/warning message differ.
+    # Number, Float, and Date share the exact same "parse everything, then
+    # either block on any failure or fill it in" policy -- only the
+    # parse/format functions and the label in the error/warning message
+    # differ.
     def _convert_parseable(columns: list[str], parse_fn: Any, format_fn: Any, type_label: str) -> None:
         if not columns:
             return
@@ -668,7 +677,23 @@ def change_type(dfs: list[pd.DataFrame], params: dict[str, Any]) -> tuple[pd.Dat
             info.append(f"Filled cell(s) that couldn't convert to {type_label} with the fallback value -- {detail}.")
 
     _convert_parseable(to_number, _to_number_or_none, _format_number, "Number")
+    _convert_parseable(to_float, _to_number_or_none, _format_float, "Float")
     _convert_parseable(to_date, _to_date_or_none, _format_date, "Date")
+    # Side-channel metadata (pandas' own `.attrs`, not a DataFrame column) --
+    # read by routers/nodes.py to tell the frontend which columns were
+    # ACTUALLY converted, and to what, so the output-preview header icon
+    # can show a column's real, current type instead of re-guessing it from
+    # its string content (which every other node's output already gets no
+    # icon at all for, having never gone through a real conversion). See
+    # columnTypeDetection.ts's resolveDisplayColumnType for how "number"
+    # still resolves to an Integer-vs-Float icon from these now-trustworthy
+    # (backend-formatted, not raw-extracted) values.
+    result.attrs["column_types"] = {
+        **{c: "number" for c in to_number},
+        **{c: "float" for c in to_float},
+        **{c: "date" for c in to_date},
+        **{c: "text" for c in to_text},
+    }
     return result, warnings, info
 
 

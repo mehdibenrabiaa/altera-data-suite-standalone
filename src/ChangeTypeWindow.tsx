@@ -58,6 +58,7 @@ function EmptyState() {
 const TYPE_OPTIONS: { value: ChangeTypeTarget; label: string }[] = [
   { value: "text", label: "Text" },
   { value: "number", label: "Number" },
+  { value: "float", label: "Float" },
   { value: "date", label: "Date" },
 ];
 
@@ -68,12 +69,12 @@ const TYPE_OPTIONS: { value: ChangeTypeTarget; label: string }[] = [
 // column JS happens to parse as a date differently than pandas would)
 // only affects the starting selection, never correctness. Built on the
 // same shared primitives columnTypeIcons.tsx's header icons use (see
-// columnTypeDetection.ts) -- this window only ever offers three target
-// types (no separate integer/float split, unlike the icon feature), so
-// it keeps its own thin wrapper collapsing those two into "number".
+// columnTypeDetection.ts) -- "integer" collapses into "number" (Number
+// already reads a whole-number column naturally, no reason to default it
+// to Float instead), while "float" passes through as itself.
 function detectColumnType(values: string[]): ChangeTypeTarget {
   const detected = sharedDetectColumnType(values);
-  return detected === "integer" || detected === "float" ? "number" : detected;
+  return detected === "integer" ? "number" : detected;
 }
 
 export default function ChangeTypeWindow() {
@@ -122,7 +123,7 @@ export default function ChangeTypeWindow() {
     setFields((prev) => prev.map((f) => (f.field === field ? { ...f, targetType } : f)));
   }, []);
 
-  const anyParseable = useMemo(() => fields.some((f) => f.targetType === "number" || f.targetType === "date"), [fields]);
+  const anyParseable = useMemo(() => fields.some((f) => f.targetType === "number" || f.targetType === "float" || f.targetType === "date"), [fields]);
 
   if (!payload) return null;
   const showEmpty = payload.columns.length === 0;

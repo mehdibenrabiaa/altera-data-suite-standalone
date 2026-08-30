@@ -388,12 +388,16 @@ export interface ColumnEditParams {
 // "tell the user" the request asked for); when on, failing cells get
 // `fallbackValue` instead and a warning (not an error) reports the
 // count. fillUnconvertible/fallbackValue are shared across every field
-// converting to Number or Date, not per-field -- nothing in the request
-// called for a different fallback per column. "date" normalizes to a
+// converting to Number, Float, or Date, not per-field -- nothing in the
+// request called for a different fallback per column. "date" normalizes to a
 // plain YYYY-MM-DD string (see backend/app/nodes.py's _to_date_or_none/
 // _format_date, built on pandas' own flexible date parser) and shares
 // the exact same fail-vs-fill policy as Number.
-export type ChangeTypeTarget = "number" | "text" | "date";
+// "float" shares Number's parser (same `_to_number_or_none`) and
+// fail-vs-fill policy, but its formatter never strips a trailing ".0" --
+// Number's does, since Number means "whichever of int/float reads
+// naturally," while Float means "always show as a decimal."
+export type ChangeTypeTarget = "number" | "float" | "text" | "date";
 export interface ChangeTypeFieldEntry {
   field: string;
   targetType: ChangeTypeTarget;
