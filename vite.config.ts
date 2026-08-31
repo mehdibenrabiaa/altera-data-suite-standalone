@@ -39,6 +39,7 @@ export default defineConfig({
         columnEdit: resolve(__dirname, "column-edit.html"),
         changeType: resolve(__dirname, "change-type.html"),
         regex: resolve(__dirname, "regex.html"),
+        cascadeFill: resolve(__dirname, "cascade-fill.html"),
       },
     },
   },

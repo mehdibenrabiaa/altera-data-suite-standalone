@@ -1064,7 +1064,8 @@ button:focus-visible {
 .shift-columns-window .match-toggle,
 .unique-window .match-toggle,
 .change-type-window .match-toggle,
-.regex-window .match-toggle {
+.regex-window .match-toggle,
+.cascade-fill-window .match-toggle {
   display: inline-flex;
   border: 1px solid #e0e0e0;
   overflow: hidden;
@@ -1074,7 +1075,8 @@ button:focus-visible {
 .shift-columns-window .match-toggle-btn,
 .unique-window .match-toggle-btn,
 .change-type-window .match-toggle-btn,
-.regex-window .match-toggle-btn {
+.regex-window .match-toggle-btn,
+.cascade-fill-window .match-toggle-btn {
   height: 22px;
   padding: 0 10px;
   font-size: 11px;
@@ -1091,13 +1093,15 @@ button:focus-visible {
 .shift-columns-window .match-toggle-btn.active,
 .unique-window .match-toggle-btn.active,
 .change-type-window .match-toggle-btn.active,
-.regex-window .match-toggle-btn.active { background: #FE4D41; color: #fff; }
+.regex-window .match-toggle-btn.active,
+.cascade-fill-window .match-toggle-btn.active { background: #FE4D41; color: #fff; }
 .filter-builder-window .match-toggle-btn:not(.active):hover,
 .merge-window .match-toggle-btn:not(.active):hover,
 .shift-columns-window .match-toggle-btn:not(.active):hover,
 .unique-window .match-toggle-btn:not(.active):hover,
 .change-type-window .match-toggle-btn:not(.active):hover,
-.regex-window .match-toggle-btn:not(.active):hover { background: #f0f0f0; color: #1a1a1a; }
+.regex-window .match-toggle-btn:not(.active):hover,
+.cascade-fill-window .match-toggle-btn:not(.active):hover { background: #f0f0f0; color: #1a1a1a; }
 
 /* Filter rows */
 .filter-builder-window .filter-rows { display: flex; flex-direction: column; gap: 6px; }
@@ -1171,7 +1175,8 @@ button:focus-visible {
 .unique-window .filter-empty-state,
 .column-edit-window .filter-empty-state,
 .change-type-window .filter-empty-state,
-.regex-window .filter-empty-state {
+.regex-window .filter-empty-state,
+.cascade-fill-window .filter-empty-state {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -1193,7 +1198,8 @@ button:focus-visible {
 .unique-window .filter-empty-state h3,
 .column-edit-window .filter-empty-state h3,
 .change-type-window .filter-empty-state h3,
-.regex-window .filter-empty-state h3 { margin: 0; font-size: 14px; font-weight: 600; color: #1a1a1a; }
+.regex-window .filter-empty-state h3,
+.cascade-fill-window .filter-empty-state h3 { margin: 0; font-size: 14px; font-weight: 600; color: #1a1a1a; }
 .filter-builder-window .filter-empty-state p,
 .header-promoter-window .filter-empty-state p,
 .browse-window .filter-empty-state p,
@@ -1203,7 +1209,8 @@ button:focus-visible {
 .unique-window .filter-empty-state p,
 .column-edit-window .filter-empty-state p,
 .change-type-window .filter-empty-state p,
-.regex-window .filter-empty-state p { margin: 0; font-size: 13px; color: #555; }
+.regex-window .filter-empty-state p,
+.cascade-fill-window .filter-empty-state p { margin: 0; font-size: 13px; color: #555; }
 
 /* Apply/Cancel footer -- this app's own addition, not part of the ported
    original (see the top-of-file comment on why). Reused as-is by Header
@@ -1767,6 +1774,22 @@ button:focus-visible {
 }
 .unique-stat-label { color: #555; }
 .unique-stat-value { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* Cascade Fill window -- reuses .unique-*'s section/checklist/stats shell
+   verbatim (same outer shape as Unique's own Configure window: a plain
+   checklist + a live stat readout, see CascadeFillWindow.tsx's own
+   comment for why the original's AG-Grid preview isn't ported), only the
+   outer wrapper class itself is new. */
+.cascade-fill-window {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  box-sizing: border-box;
+  background: #f5f5f5;
+  font-family: "Google Sans Flex", sans-serif;
+  font-size: 13px;
+  color: #1a1a1a;
+}
 
 /* Column Edit window -- same outer shell/section rhythm as the other
    Configure windows, plus its own sortable column-row list (ported from
@@ -3781,6 +3804,39 @@ body.dock-dragging .dock-style-canvas-dock-panel {
   user-select: none;
 }
 .ctx-menu-item:hover {
+  background: #ffe0d6;
+  color: #000000;
+}
+
+/* Custom AG-Grid cell right-click menu (see gridCellCopy.tsx's own
+   comment for why this is hand-built instead of AG-Grid's own Enterprise-
+   only context menu) -- `position: fixed` at the raw click coordinates
+   since these grids each live in their own window/container, not a
+   shared canvas coordinate space like .rect-ctx-menu above. */
+.grid-cell-ctx-menu {
+  position: fixed;
+  z-index: 1000;
+  background: #f0f0f0;
+  border: 1px solid #adadad;
+  box-shadow: 2px 4px 12px rgba(0, 0, 0, 0.2);
+  padding: 4px 0;
+  min-width: 120px;
+  font-family: inherit;
+}
+.grid-cell-ctx-menu-item {
+  display: block;
+  width: 100%;
+  padding: 5px 12px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 11px;
+  font-family: inherit;
+  color: #333333;
+  text-align: left;
+  user-select: none;
+}
+.grid-cell-ctx-menu-item:hover {
   background: #ffe0d6;
   color: #000000;
 }

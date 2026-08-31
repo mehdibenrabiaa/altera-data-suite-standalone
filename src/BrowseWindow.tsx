@@ -5,6 +5,7 @@ import { ModuleRegistry, AllCommunityModule, themeQuartz, type ColDef } from "ag
 import type { BrowseWindowPayload } from "./vite-env";
 import { resolveDisplayColumnType, DETECTION_SAMPLE_ROWS } from "./columnTypeDetection";
 import { TypedColumnHeader } from "./columnTypeIcons";
+import { useGridCellCopy } from "./gridCellCopy";
 import "./App.css";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
@@ -99,6 +100,7 @@ function EmptyState() {
 // back to the main window, just live-once-opened data.
 export default function BrowseWindow() {
   const [payload, setPayload] = useState<BrowseWindowPayload | null>(null);
+  const { onCellKeyDown, onCellContextMenu, suppressContextMenu, contextMenu } = useGridCellCopy();
 
   useEffect(() => {
     if (!window.alteraStudio) return;
@@ -184,9 +186,13 @@ export default function BrowseWindow() {
             // treats dots in `field` as nested-path separators by default,
             // which would render such a column empty.
             suppressFieldDotNotation
+            onCellKeyDown={onCellKeyDown}
+            onCellContextMenu={onCellContextMenu}
+            suppressContextMenu={suppressContextMenu}
           />
         )}
       </div>
+      {contextMenu}
     </ConfigProvider>
   );
 }

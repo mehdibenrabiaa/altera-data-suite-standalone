@@ -30,7 +30,7 @@ import { Spin } from "antd";
 import { LoadingOutlined } from "@ant-design/icons";
 import { AgGridReact } from "ag-grid-react";
 import { ModuleRegistry, AllCommunityModule, themeQuartz, type ColDef } from "ag-grid-community";
-import type { Rectangle, Group, SchemaPreviewTable, ProcessorNodeInstance, FilterBuilderParams, FilterColumnDefinition, HeaderPromoterParams, MergeParams, ShiftColumnsParams, CleanerParams, UniqueParams, ColumnEditParams, ChangeTypeParams, RegexParams, NodeLogEntry } from "../types";
+import type { Rectangle, Group, SchemaPreviewTable, ProcessorNodeInstance, FilterBuilderParams, FilterColumnDefinition, HeaderPromoterParams, MergeParams, ShiftColumnsParams, CleanerParams, UniqueParams, ColumnEditParams, ChangeTypeParams, RegexParams, CascadeFillParams, NodeLogEntry } from "../types";
 import { computeDefaultMatchPair } from "../mergeDefaults";
 import {
   NODE_DRAG_MIME,
@@ -42,13 +42,14 @@ import {
 } from "../nodeCatalog";
 import { runProcessorNode, type NodeTableInput } from "../nodeExecution";
 import { resolveDisplayColumnType, DETECTION_SAMPLE_ROWS, type AppliedColumnType } from "../columnTypeDetection";
+import { useGridCellCopy } from "../gridCellCopy";
 import { TypedColumnHeader } from "../columnTypeIcons";
 
 // Catalog widget names that actually have a wired-up backend transform
 // (backend/app/nodes.py's NODE_TRANSFORMS registry) -- gates the "Run"
 // context-menu item so it only appears on nodes that can really execute.
 // Extend both maps together as more real nodes come online.
-const RUNNABLE_NODE_KINDS = new Set(["Horizontal Stack", "Filter Builder", "Header Promoter", "Index Column", "Merge", "Shift Columns", "Cleaner", "Unique", "Column Edit", "Change Type", "Regular Expressions"]);
+const RUNNABLE_NODE_KINDS = new Set(["Horizontal Stack", "Filter Builder", "Header Promoter", "Index Column", "Merge", "Shift Columns", "Cleaner", "Unique", "Column Edit", "Change Type", "Regular Expressions", "Cascade Fill"]);
 const NODE_KIND_SLUGS: Record<string, string> = {
   "Horizontal Stack": "horizontal_stack",
   "Filter Builder": "filter_builder",
@@ -61,6 +62,7 @@ const NODE_KIND_SLUGS: Record<string, string> = {
   "Column Edit": "column_edit",
   "Change Type": "change_type",
   "Regular Expressions": "extract_regex",
+  "Cascade Fill": "cascade_fill",
 };
 // Minimum resolved (primary) inputs a kind needs before it's worth
 // running -- Horizontal Stack needs 2+ tables to combine, Filter Builder
@@ -96,6 +98,7 @@ const NODE_WINDOW_LABEL: Record<string, string> = {
   "Column Edit": "Configure…",
   "Change Type": "Configure…",
   "Regular Expressions": "Configure…",
+  "Cascade Fill": "Configure…",
 };
 const NODE_KINDS_WITH_WINDOW = new Set(Object.keys(NODE_WINDOW_LABEL));
 
@@ -1061,6 +1064,7 @@ export default function SchemaView({
   onSelectedNodeLogChange,
   visible,
 }: SchemaViewProps) {
+  const { onCellKeyDown: onOutputCellKeyDown, onCellContextMenu: onOutputCellContextMenu, suppressContextMenu: suppressOutputContextMenu, contextMenu: outputCellContextMenu } = useGridCellCopy();
   // Single source of truth for card content: real preview data once it has
   // landed, otherwise dummy columns + placeholder rows derived from the
   // actual rectangles (or a fully fake example set when none exist yet).
@@ -2151,6 +2155,24 @@ export default function SchemaView({
   // Opens (or focuses/reseeds) the node's Configure window -- same real-
   // window, snapshot-on-open pattern as the others above. Needs the
   // primary input's ROWS too (not just column names) so the live
+  // Total/Cells-to-fill stat readout has real data to compute against.
+  const handleOpenCascadeFill = useCallback((id: string) => {
+    const proc = processorNodes.find((p) => p.id === id);
+    if (!proc) return;
+    const primary = resolveNodeInputs(id)[0];
+    window.alteraStudio.openCascadeFillWindow({
+      nodeId: id,
+      nodeName: proc.name || proc.catalogName,
+      columns: primary?.columns ?? [],
+      rows: primary?.rows ?? [],
+      initialParams: (proc.params as CascadeFillParams | undefined) ?? { columns: [], direction: "down", customNulls: [] },
+    });
+    closeNodeCtxMenu();
+  }, [processorNodes, resolveNodeInputs, closeNodeCtxMenu]);
+
+  // Opens (or focuses/reseeds) the node's Configure window -- same real-
+  // window, snapshot-on-open pattern as the others above. Needs the
+  // primary input's ROWS too (not just column names) so the live
   // match-preview grid has real data to highlight.
   const handleOpenRegex = useCallback((id: string) => {
     const proc = processorNodes.find((p) => p.id === id);
@@ -2252,8 +2274,9 @@ export default function SchemaView({
     else if (proc?.catalogName === "Column Edit") handleOpenColumnEdit(id);
     else if (proc?.catalogName === "Change Type") handleOpenChangeType(id);
     else if (proc?.catalogName === "Regular Expressions") handleOpenRegex(id);
+    else if (proc?.catalogName === "Cascade Fill") handleOpenCascadeFill(id);
     else handleOpenFilterBuilder(id);
-  }, [processorNodes, handleOpenBrowse, handleOpenHeaderPromoter, handleOpenMerge, handleOpenShiftColumns, handleOpenCleaner, handleOpenUnique, handleOpenColumnEdit, handleOpenChangeType, handleOpenRegex, handleOpenFilterBuilder, onNodesChange]);
+  }, [processorNodes, handleOpenBrowse, handleOpenHeaderPromoter, handleOpenMerge, handleOpenShiftColumns, handleOpenCleaner, handleOpenUnique, handleOpenColumnEdit, handleOpenChangeType, handleOpenRegex, handleOpenCascadeFill, handleOpenFilterBuilder, onNodesChange]);
 
   // `select`: only true for a user-initiated single-node run (the context
   // menu's "Run"), which is the one case selecting the node to show its
@@ -3302,6 +3325,9 @@ export default function SchemaView({
                 // separators by default, which would render such a column
                 // empty.
                 suppressFieldDotNotation
+                onCellKeyDown={onOutputCellKeyDown}
+                onCellContextMenu={onOutputCellContextMenu}
+                suppressContextMenu={suppressOutputContextMenu}
               />
             ) : (
               <div className="schema-output-drawer-placeholder">
@@ -3311,6 +3337,7 @@ export default function SchemaView({
           </div>
         )}
       </div>
+      {outputCellContextMenu}
     </div>
     </EdgeDeleteContext.Provider>
     </ProcessorNodeConfigureContext.Provider>

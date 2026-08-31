@@ -302,6 +302,31 @@ contextBridge.exposeInMainWorld("alteraStudio", {
     ipcRenderer.send("regex:close");
   },
 
+  // Main window: open (or focus/reseed) the separate Cascade Fill
+  // configure window for one node -- same real-window, round-trips-on-
+  // Apply pattern as Filter Builder/Header Promoter/Merge/Shift Columns/
+  // Cleaner/Unique/Column Edit/Change Type/Regex above.
+  openCascadeFillWindow: (payload: unknown): void => {
+    ipcRenderer.invoke("cascadeFill:open", payload);
+  },
+  onCascadeFillApplied: (cb: (payload: unknown) => void): (() => void) => {
+    const listener = (_event: unknown, payload: unknown) => cb(payload);
+    ipcRenderer.on("cascadeFill:applied", listener);
+    return () => ipcRenderer.removeListener("cascadeFill:applied", listener);
+  },
+  requestCascadeFillInit: (nodeId: string): Promise<unknown> => ipcRenderer.invoke("cascadeFill:request-init", nodeId),
+  onCascadeFillInit: (cb: (payload: unknown) => void): (() => void) => {
+    const listener = (_event: unknown, payload: unknown) => cb(payload);
+    ipcRenderer.on("cascadeFill:init", listener);
+    return () => ipcRenderer.removeListener("cascadeFill:init", listener);
+  },
+  applyCascadeFill: (payload: unknown): void => {
+    ipcRenderer.send("cascadeFill:apply", payload);
+  },
+  closeCascadeFillWindow: (): void => {
+    ipcRenderer.send("cascadeFill:close");
+  },
+
   // Main window: closes whichever kept-alive window (Configure or Browse)
   // is currently showing this node, if any -- called once per deleted
   // processor node so an open per-node window doesn't outlive the node

@@ -439,6 +439,21 @@ export interface RegexParams {
   newColumnName: string;
 }
 
+// Cascade Fill's params -- ported from the original OWCascadeFill widget
+// (devkit/orangecontrib/custom/widgets/cascade_fill.py)'s own fill_state
+// Setting. "down" propagates each column's last-seen value forward into
+// empty cells below it (ffill); "up" propagates the next value backward
+// into empty cells above it (bfill) -- see backend/app/nodes.py's
+// cascade_fill for exactly what counts as "empty" (blank, "?", or a value
+// in customNulls) and how a leading/trailing run with nothing to
+// propagate from is left as "".
+export type CascadeFillDirection = "down" | "up";
+export interface CascadeFillParams {
+  columns: string[];
+  direction: CascadeFillDirection;
+  customNulls: string[];
+}
+
 // Column "type" for a Configure dialog's per-column operator/value-editor
 // choice -- this app's tables are plain {columns, rows} strings with no
 // schema (unlike the original's Orange Domain), so type is inferred from

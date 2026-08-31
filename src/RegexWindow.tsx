@@ -4,6 +4,7 @@ import { AgGridReact } from "ag-grid-react";
 import { ModuleRegistry, AllCommunityModule, themeQuartz, type ColDef, type GridApi, type ICellRendererParams } from "ag-grid-community";
 import type { RegexParams, RegexMode } from "./types";
 import type { RegexWindowPayload } from "./vite-env";
+import { useGridCellCopy } from "./gridCellCopy";
 import "./App.css";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
@@ -248,6 +249,7 @@ function HighlightCell(props: ICellRendererParams) {
 }
 
 export default function RegexWindow() {
+  const { onCellKeyDown, onCellContextMenu, suppressContextMenu, contextMenu } = useGridCellCopy();
   const [payload, setPayload] = useState<RegexWindowPayload | null>(null);
   const [column, setColumn] = useState("");
   const [pattern, setPattern] = useState("");
@@ -426,6 +428,9 @@ export default function RegexWindow() {
                 context={gridContext}
                 suppressFieldDotNotation
                 onGridReady={(e) => { gridApiRef.current = e.api; }}
+                onCellKeyDown={onCellKeyDown}
+                onCellContextMenu={onCellContextMenu}
+                suppressContextMenu={suppressContextMenu}
               />
             </div>
           </div>
@@ -435,6 +440,7 @@ export default function RegexWindow() {
           <button className="filter-builder-btn-primary" onClick={handleApply} disabled={showEmpty || !column || !pattern || !!patternError}>Apply</button>
         </div>
       </div>
+      {contextMenu}
     </ConfigProvider>
   );
 }

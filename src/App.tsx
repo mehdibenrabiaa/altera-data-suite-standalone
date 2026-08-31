@@ -2548,6 +2548,11 @@ const KonvaA4Editor = () => {
       handleUpdateProcessorNodeParams(nodeId, params as unknown as Record<string, unknown>);
     });
   }, [handleUpdateProcessorNodeParams]);
+  useEffect(() => {
+    return window.alteraStudio.onCascadeFillApplied(({ nodeId, params }) => {
+      handleUpdateProcessorNodeParams(nodeId, params as unknown as Record<string, unknown>);
+    });
+  }, [handleUpdateProcessorNodeParams]);
 
   // Workflow-canvas edges -- see the `edges` state comment above for why
   // these live here now instead of as local SchemaView state.

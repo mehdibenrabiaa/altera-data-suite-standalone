@@ -242,7 +242,7 @@ ipcMain.on("settings:close", () => {
 // in the Maps below. Actually destroyed (not just hidden) when the node
 // itself is deleted (see node:deleted further down), since a deleted
 // node's window can never be reopened and would otherwise leak forever.
-function createPerNodeWindowManager(kind: "filterBuilder" | "browse" | "headerPromoter" | "merge" | "shiftColumns" | "cleaner" | "unique" | "columnEdit" | "changeType" | "regex", opts: {
+function createPerNodeWindowManager(kind: "filterBuilder" | "browse" | "headerPromoter" | "merge" | "shiftColumns" | "cleaner" | "unique" | "columnEdit" | "changeType" | "regex" | "cascadeFill", opts: {
   width: number; height: number; minWidth: number; minHeight: number; title: string; htmlFile: string; icon?: string;
 }) {
   const windows = new Map<string, BrowserWindow>();
@@ -453,6 +453,22 @@ ipcMain.on("regex:apply", (event, payload: { nodeId: string; [key: string]: unkn
   BrowserWindow.fromWebContents(event.sender)?.hide();
 });
 
+// Cascade Fill -- same real-Configure-window, round-trips-on-Apply shape
+// as Filter Builder/Header Promoter/Merge/Shift Columns/Cleaner/Unique/
+// Column Edit/Change Type/Regex above. No dedicated node-icon PNG exists
+// yet (only public/node-icons/cascade_fill.svg, and nativeImage doesn't
+// support SVG -- see the icon option's own comment above), so this one
+// falls back to the generic APP_ICON like every other opts.icon-less
+// manager already does.
+const cascadeFillManager = createPerNodeWindowManager("cascadeFill", {
+  width: 480, height: 640, minWidth: 420, minHeight: 460, title: "Configure Node", htmlFile: "cascade-fill.html",
+});
+
+ipcMain.on("cascadeFill:apply", (event, payload: { nodeId: string; [key: string]: unknown }) => {
+  win?.webContents.send("cascadeFill:applied", payload);
+  BrowserWindow.fromWebContents(event.sender)?.hide();
+});
+
 // Silent live refresh -- distinct from browse:open, which also shows/
 // focuses the window (fine for an explicit double-click, but would
 // annoyingly steal focus/pop the window to front every time this fires,
@@ -485,6 +501,7 @@ ipcMain.on("node:deleted", (_event, nodeId: string) => {
   columnEditManager.closeForNode(nodeId);
   changeTypeManager.closeForNode(nodeId);
   regexManager.closeForNode(nodeId);
+  cascadeFillManager.closeForNode(nodeId);
 });
 
 // Native File/Edit/View/Window/Help menu replaced by an in-page menu bar

@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 
-import type { SettingsPayload, PersistedSettings, FilterBuilderParams, FilterColumnDefinition, HeaderPromoterParams, MergeParams, ShiftColumnsParams, CleanerParams, UniqueParams, ColumnEditParams, ChangeTypeParams, RegexParams } from "./types";
+import type { SettingsPayload, PersistedSettings, FilterBuilderParams, FilterColumnDefinition, HeaderPromoterParams, MergeParams, ShiftColumnsParams, CleanerParams, UniqueParams, ColumnEditParams, ChangeTypeParams, RegexParams, CascadeFillParams } from "./types";
 import type { AppliedColumnType } from "./columnTypeDetection";
 
 // Mirrors the original devkit/filter-builder project's own ExtraColumnDef
@@ -161,6 +161,22 @@ export interface RegexAppliedPayload {
   params: RegexParams;
 }
 
+// Cascade Fill's Configure window needs the resolved input's ROWS too
+// (not just column names) -- the live Total/Cells-to-fill stat readout is
+// computed client-side from the actual row values, same reasoning as
+// UniqueWindowPayload's own rows field.
+export interface CascadeFillWindowPayload {
+  nodeId: string;
+  nodeName: string;
+  columns: string[];
+  rows: string[][];
+  initialParams: CascadeFillParams;
+}
+export interface CascadeFillAppliedPayload {
+  nodeId: string;
+  params: CascadeFillParams;
+}
+
 declare global {
   interface Window {
     alteraStudio: {
@@ -319,6 +335,21 @@ declare global {
       onRegexInit: (cb: (payload: RegexWindowPayload) => void) => () => void;
       applyRegex: (payload: RegexAppliedPayload) => void;
       closeRegexWindow: () => void;
+
+      // Main window: open (or focus/reseed) the separate Cascade Fill
+      // configure window for one node -- same real-window pattern as
+      // Filter Builder/Header Promoter/Merge/Shift Columns/Cleaner/
+      // Unique/Column Edit/Change Type/Regex above, including round-
+      // tripping edits back on Apply.
+      openCascadeFillWindow: (payload: CascadeFillWindowPayload) => void;
+      onCascadeFillApplied: (cb: (payload: CascadeFillAppliedPayload) => void) => () => void;
+      // Cascade Fill window only -- nodeId is which one of potentially
+      // several open Configure windows this is (read from this window's
+      // own URL, same reasoning as requestFilterBuilderInit above).
+      requestCascadeFillInit: (nodeId: string) => Promise<CascadeFillWindowPayload>;
+      onCascadeFillInit: (cb: (payload: CascadeFillWindowPayload) => void) => () => void;
+      applyCascadeFill: (payload: CascadeFillAppliedPayload) => void;
+      closeCascadeFillWindow: () => void;
 
       // Main window: closes whichever kept-alive per-node window
       // (Configure, Browse, Header Promoter, Merge, Shift Columns,

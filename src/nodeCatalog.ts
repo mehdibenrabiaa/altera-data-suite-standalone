@@ -111,7 +111,7 @@ export const NODE_CATALOG: NodeCatalogEntry[] = [
   { name: "Index Column", description: "Add a row-index column numbered 1 to N.", icon: "./node-icons/index.svg", category: "preparation", mainInputMax: 1 },
   { name: "Filter Builder", description: "Advanced AND/OR filtering with full type preservation.", icon: "./node-icons/filter.svg", category: "preparation", hasExtraInput: true, mainInputMax: 1 },
   { name: "Unique", description: "Remove duplicate rows based on selected columns.", icon: "./node-icons/deduplicator.svg", category: "preparation", mainInputMax: 1 },
-  { name: "Cascade Fill", description: "Fill up or fill down to propagate values vertically within columns.", icon: "./node-icons/cascade_fill.svg", category: "preparation" },
+  { name: "Cascade Fill", description: "Fill up or fill down to propagate values vertically within columns.", icon: "./node-icons/cascade_fill.svg", category: "preparation", mainInputMax: 1 },
   { name: "Cleaner", description: "Clean and transform text columns with various operations.", icon: "./node-icons/cleaner.svg", category: "preparation", mainInputMax: 1 },
   // Join -- Alteryx's own Join tool is exactly Merge's "match on shared
   // columns" mode, and its Append Fields tool is exactly Horizontal

@@ -800,6 +800,37 @@ def extract_regex(dfs: list[pd.DataFrame], params: dict[str, Any]) -> tuple[pd.D
     return result, [], []
 
 
+# ── Cascade Fill ─────────────────────────────────────────────────────────
+# Ported from OWCascadeFill (devkit/orangecontrib/custom/widgets/
+# cascade_fill.py) -- fill up/down to propagate a column's last-seen value
+# into empty cells below/above it. The original's own dtype branching
+# (`if result[col].dtype == object: ...`) doesn't apply here: every column
+# in this app's wire format is already string/object dtype (see
+# routers/nodes.py's own fillna("").astype(str)), so this always treats a
+# column's null markers as replaceable and always re-fills any leftover
+# NaN (leading/trailing cells with nothing to propagate from) with "" at
+# the end, unconditionally.
+def cascade_fill(dfs: list[pd.DataFrame], params: dict[str, Any]) -> tuple[pd.DataFrame, list[str], list[str]]:
+    if not dfs:
+        raise ValueError("Cascade Fill needs a connected input table.")
+    df = dfs[0]
+    columns = [c for c in (params.get("columns") or []) if c in df.columns]
+    if not columns:
+        return df, [], []  # nothing selected yet -- pass through unchanged
+
+    direction = params.get("direction", "down")
+    custom_nulls = params.get("customNulls") or []
+
+    result = df.copy()
+    for col in columns:
+        result[col] = result[col].replace({"": np.nan, "?": np.nan})
+        if custom_nulls:
+            result[col] = result[col].replace(custom_nulls, np.nan)
+        result[col] = result[col].ffill() if direction == "down" else result[col].bfill()
+        result[col] = result[col].fillna("")
+    return result, [], []
+
+
 NODE_TRANSFORMS: dict[str, Callable[[list[pd.DataFrame], dict[str, Any]], tuple[pd.DataFrame, list[str], list[str]]]] = {
     "horizontal_stack": horizontal_stack,
     "filter_builder": filter_builder,
@@ -811,5 +842,6 @@ NODE_TRANSFORMS: dict[str, Callable[[list[pd.DataFrame], dict[str, Any]], tuple[
     "deduplicate_rows": deduplicate_rows,
     "column_edit": column_edit,
     "change_type": change_type,
+    "cascade_fill": cascade_fill,
     "extract_regex": extract_regex,
 }

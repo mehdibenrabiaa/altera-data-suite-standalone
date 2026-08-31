@@ -4,6 +4,7 @@ import { AgGridReact } from "ag-grid-react";
 import { ModuleRegistry, AllCommunityModule, themeQuartz, type ColDef, type GridApi, type RowClickedEvent } from "ag-grid-community";
 import type { HeaderPromoterParams } from "./types";
 import type { HeaderPromoterWindowPayload } from "./vite-env";
+import { useGridCellCopy } from "./gridCellCopy";
 import "./App.css";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
@@ -113,6 +114,7 @@ function EmptyState() {
 // auto-push on every selection change -- matching this app's own Filter
 // Builder convention (auto-run only re-fires on Apply).
 export default function HeaderPromoterWindow() {
+  const { onCellKeyDown, onCellContextMenu, suppressContextMenu, contextMenu } = useGridCellCopy();
   const [payload, setPayload] = useState<HeaderPromoterWindowPayload | null>(null);
   const [rowIndex, setRowIndex] = useState<number | null>(null);
   const [removeAbove, setRemoveAbove] = useState(true);
@@ -230,6 +232,9 @@ export default function HeaderPromoterWindow() {
                 }}
                 onRowClicked={handleRowClicked}
                 onGridReady={(e) => { gridApiRef.current = e.api; }}
+                onCellKeyDown={onCellKeyDown}
+                onCellContextMenu={onCellContextMenu}
+                suppressContextMenu={suppressContextMenu}
               />
             </div>
           </div>
@@ -239,6 +244,7 @@ export default function HeaderPromoterWindow() {
           <button className="filter-builder-btn-primary" onClick={handleApply} disabled={showEmpty || rowIndex === null}>Apply</button>
         </div>
       </div>
+      {contextMenu}
     </ConfigProvider>
   );
 }
