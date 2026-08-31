@@ -1209,10 +1209,22 @@ export default function SchemaView({
         } as Node;
       });
 
+      // Each box's own ABSOLUTE canvas position -- top boxes' `position` IS
+      // already absolute (no parentId), a subfolder box's `position` is
+      // relative to its top box (xyflow's convention for any parented
+      // node), so its absolute position is that top box's absolute plus its
+      // own relative offset. Used below to convert a member card's saved
+      // ABSOLUTE schemaX/schemaY (handleNodeDragStop persists positionAbsolute
+      // regardless of whether the card is boxed) back into the parent-
+      // relative position xyflow expects once it's re-parented on load.
+      const boxAbsById = new Map<string, { x: number; y: number }>();
+      topGroupBoxNodes.forEach((n) => boxAbsById.set(n.id, n.position));
+
       // ── Bucket 2: subfolder group boxes ──
       const subGroupBoxNodes: Node[] = [];
       visibleTopGroups.forEach((topGroup) => {
         const subs = subGroupsByParent.get(topGroup.id) ?? [];
+        const topBoxAbs = boxAbsById.get(groupBoxId(topGroup.id)) ?? { x: 0, y: 0 };
         subs.forEach((sub, subIndex) => {
           const boxId = groupBoxId(sub.id);
           const prev = prevById.get(boxId);
@@ -1220,6 +1232,7 @@ export default function SchemaView({
           const position = prev
             ? prev.position
             : { x: GROUP_BOX_PADDING + subIndex * (CARD_ESTIMATED_WIDTH + GROUP_BOX_MEMBER_GAP), y: GROUP_BOX_HEADER_HEIGHT + GROUP_BOX_PADDING };
+          boxAbsById.set(boxId, { x: topBoxAbs.x + position.x, y: topBoxAbs.y + position.y });
           subGroupBoxNodes.push({
             id: boxId,
             type: "groupBoxNode",
@@ -1245,6 +1258,16 @@ export default function SchemaView({
         let position: { x: number; y: number };
         if (prev) {
           position = prev.position;
+        } else if (rect?.schemaX !== undefined && rect?.schemaY !== undefined) {
+          // Restore this card's own last-dragged position -- previously
+          // this branch didn't exist at all, so a card silently reset to
+          // the auto-stacked default below every time a project was
+          // reopened, even though handleNodeDragStop had been persisting
+          // it correctly all along.
+          const boxAbs = boxId ? boxAbsById.get(boxId) : undefined;
+          position = boxAbs
+            ? { x: rect.schemaX - boxAbs.x, y: rect.schemaY - boxAbs.y }
+            : { x: rect.schemaX, y: rect.schemaY };
         } else if (boxId) {
           // Members of a group box lay out left-to-right (a row), not
           // stacked top-to-bottom -- matches the sibling subfolder-box
@@ -1351,7 +1374,37 @@ export default function SchemaView({
     });
   }, [displayTables, rectById, rectangles, groups, processorNodes, onRenameColumn, selectedIds]);
 
-  const onNodesChange = useCallback((changes: NodeChange[]) => {
+  // Ctrl+drag-marquee adds the marquee's catch to whatever was already
+  // selected, instead of xyflow's own built-in behavior -- a marquee drag
+  // always REPLACES the selection outright, with no merge, regardless of
+  // any modifier key (confirmed directly in its source: the drag handler
+  // computes selectedNodeIds fresh from nothing but the box's own overlap,
+  // on every pointer-move tick for the whole drag, not just once at the
+  // end). Snapshotting at drag-START, not the end: onNodesChange below
+  // strips the resulting deselect changes for this set out of every one of
+  // those ticks (not just the final one) -- these nodes' `selected` state
+  // is never actually touched mid-drag, so there's no flicker to a
+  // visually-deselected state and back, the bug an end-of-drag-only fix
+  // (re-select after the fact) still had.
+  const preMarqueeSelectedIdsRef = useRef<Set<string>>(new Set());
+  const marqueeAdditiveRef = useRef(false);
+  const handleSelectionStart = useCallback((event: { ctrlKey: boolean; metaKey: boolean }) => {
+    marqueeAdditiveRef.current = event.ctrlKey || event.metaKey;
+    preMarqueeSelectedIdsRef.current = new Set(nodesRef.current.filter((n) => n.selected).map((n) => n.id));
+  }, []);
+  const handleSelectionEnd = useCallback(() => {
+    marqueeAdditiveRef.current = false;
+  }, []);
+
+  const onNodesChange = useCallback((rawChanges: NodeChange[]) => {
+    // See preMarqueeSelectedIdsRef above -- drop only the deselect half of
+    // a select change for a node that was selected before this marquee
+    // drag started; a select:true change (the marquee's own new catch) is
+    // untouched, so the two sets simply union.
+    const changes = marqueeAdditiveRef.current
+      ? rawChanges.filter((c) => !(c.type === "select" && c.selected === false && preMarqueeSelectedIdsRef.current.has(c.id)))
+      : rawChanges;
+
     // Mirrors table-card selection into App.tsx's selectedIds -- see the
     // `selected` comment on tableCardNodes above for why (Layers panel
     // sync, and Backspace/Delete not silently touching a card the user
@@ -3070,6 +3123,8 @@ export default function SchemaView({
         onNodesDelete={onNodesDelete}
         onPaneContextMenu={onPaneContextMenu}
         onNodeContextMenu={onNodeContextMenu}
+        onSelectionStart={handleSelectionStart}
+        onSelectionEnd={handleSelectionEnd}
         onInit={(instance) => { reactFlowInstanceRef.current = instance; tryFitView(); }}
         proOptions={{ hideAttribution: true }}
         // Partial (not the default Full) so the marquee selects a card as
