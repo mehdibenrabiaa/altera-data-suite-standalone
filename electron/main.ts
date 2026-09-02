@@ -242,7 +242,7 @@ ipcMain.on("settings:close", () => {
 // in the Maps below. Actually destroyed (not just hidden) when the node
 // itself is deleted (see node:deleted further down), since a deleted
 // node's window can never be reopened and would otherwise leak forever.
-function createPerNodeWindowManager(kind: "filterBuilder" | "browse" | "headerPromoter" | "merge" | "shiftColumns" | "cleaner" | "unique" | "columnEdit" | "changeType" | "regex" | "cascadeFill", opts: {
+function createPerNodeWindowManager(kind: "filterBuilder" | "browse" | "headerPromoter" | "merge" | "shiftColumns" | "cleaner" | "unique" | "columnEdit" | "changeType" | "regex" | "cascadeFill" | "export" | "unpivotColumns" | "pivotColumns" | "addColumn", opts: {
   width: number; height: number; minWidth: number; minHeight: number; title: string; htmlFile: string; icon?: string;
 }) {
   const windows = new Map<string, BrowserWindow>();
@@ -469,6 +469,84 @@ ipcMain.on("cascadeFill:apply", (event, payload: { nodeId: string; [key: string]
   BrowserWindow.fromWebContents(event.sender)?.hide();
 });
 
+// Export -- same real-Configure-window, round-trips-on-Apply shape as
+// every other Configure window above, but the one sink node: Apply saves
+// where/how to write, the actual file(s) only get written when the node
+// is Run (backend/app/nodes.py's export_data), same as any other node's
+// transform only running on Run, not on Apply.
+const exportManager = createPerNodeWindowManager("export", {
+  width: 520, height: 420, minWidth: 460, minHeight: 380, title: "Configure Node", htmlFile: "export.html",
+  icon: path.join(__dirname, "../public/node-icons/excel_exporter.png"),
+});
+
+ipcMain.on("export:apply", (event, payload: { nodeId: string; [key: string]: unknown }) => {
+  win?.webContents.send("export:applied", payload);
+  BrowserWindow.fromWebContents(event.sender)?.hide();
+});
+
+// Export's own two output-location pickers -- a single .xlsx FILE
+// (multiple connected tables become multiple sheets within it) vs an
+// existing FOLDER (a CSV can only hold one table, so a multi-table export
+// writes one file per table into it) are genuinely different native
+// dialogs, not just a filter difference, so each gets its own handler
+// rather than one that branches on a passed-in format.
+ipcMain.handle("export:chooseFile", async (event) => {
+  const owner = BrowserWindow.fromWebContents(event.sender) ?? win;
+  if (!owner) return null;
+  const { canceled, filePath } = await dialog.showSaveDialog(owner, {
+    title: "Choose Export File",
+    filters: [{ name: "Excel Workbook", extensions: ["xlsx"] }],
+    defaultPath: "Export.xlsx",
+  });
+  return canceled || !filePath ? null : filePath;
+});
+
+ipcMain.handle("export:chooseFolder", async (event) => {
+  const owner = BrowserWindow.fromWebContents(event.sender) ?? win;
+  if (!owner) return null;
+  const { canceled, filePaths } = await dialog.showOpenDialog(owner, {
+    title: "Choose Export Folder",
+    properties: ["openDirectory", "createDirectory"],
+  });
+  return canceled || filePaths.length === 0 ? null : filePaths[0];
+});
+
+// Unpivot Columns -- same real-Configure-window, round-trips-on-Apply
+// shape as every other Configure window above.
+const unpivotColumnsManager = createPerNodeWindowManager("unpivotColumns", {
+  width: 480, height: 620, minWidth: 420, minHeight: 460, title: "Configure Node", htmlFile: "unpivot-columns.html",
+  icon: path.join(__dirname, "../public/node-icons/unpivot.png"),
+});
+
+ipcMain.on("unpivotColumns:apply", (event, payload: { nodeId: string; [key: string]: unknown }) => {
+  win?.webContents.send("unpivotColumns:applied", payload);
+  BrowserWindow.fromWebContents(event.sender)?.hide();
+});
+
+// Pivot Columns -- same real-Configure-window, round-trips-on-Apply
+// shape as every other Configure window above.
+const pivotColumnsManager = createPerNodeWindowManager("pivotColumns", {
+  width: 460, height: 380, minWidth: 400, minHeight: 340, title: "Configure Node", htmlFile: "pivot-columns.html",
+  icon: path.join(__dirname, "../public/node-icons/pivot.png"),
+});
+
+ipcMain.on("pivotColumns:apply", (event, payload: { nodeId: string; [key: string]: unknown }) => {
+  win?.webContents.send("pivotColumns:applied", payload);
+  BrowserWindow.fromWebContents(event.sender)?.hide();
+});
+
+// Add Column -- same real-Configure-window, round-trips-on-Apply shape as
+// every other Configure window above.
+const addColumnManager = createPerNodeWindowManager("addColumn", {
+  width: 520, height: 560, minWidth: 440, minHeight: 460, title: "Configure Node", htmlFile: "add-column.html",
+  icon: path.join(__dirname, "../public/node-icons/add_column.png"),
+});
+
+ipcMain.on("addColumn:apply", (event, payload: { nodeId: string; [key: string]: unknown }) => {
+  win?.webContents.send("addColumn:applied", payload);
+  BrowserWindow.fromWebContents(event.sender)?.hide();
+});
+
 // Silent live refresh -- distinct from browse:open, which also shows/
 // focuses the window (fine for an explicit double-click, but would
 // annoyingly steal focus/pop the window to front every time this fires,
@@ -502,6 +580,10 @@ ipcMain.on("node:deleted", (_event, nodeId: string) => {
   changeTypeManager.closeForNode(nodeId);
   regexManager.closeForNode(nodeId);
   cascadeFillManager.closeForNode(nodeId);
+  exportManager.closeForNode(nodeId);
+  unpivotColumnsManager.closeForNode(nodeId);
+  pivotColumnsManager.closeForNode(nodeId);
+  addColumnManager.closeForNode(nodeId);
 });
 
 // Native File/Edit/View/Window/Help menu replaced by an in-page menu bar

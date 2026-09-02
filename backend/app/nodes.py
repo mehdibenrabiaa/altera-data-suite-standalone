@@ -1,5 +1,8 @@
+import ast
+import operator
 import re
 import string
+from pathlib import Path
 from typing import Any, Callable
 
 import numpy as np
@@ -68,6 +71,28 @@ def horizontal_stack(dfs: list[pd.DataFrame], params: dict[str, Any]) -> tuple[p
     result = pd.concat(dfs, axis=1)
     result.columns = _make_unique_column_names(list(result.columns))
     return result, warnings, []
+
+
+# ── Concatenate ──────────────────────────────────────────────────────────
+# Orange's own Concatenate widget: stacks every connected table's ROWS into
+# one, matching columns by NAME across however many tables are connected
+# (not just two) -- the opposite axis from Horizontal Stack above, which
+# combines column-wise by position instead. A column present in only some
+# of the input tables is blank ("", this app's own null marker -- see
+# routers/nodes.py's fillna("").astype(str) on every other node's result
+# too) for any row from a table that didn't have it, rather than dropping
+# that column or erroring. No configurable params -- like Horizontal
+# Stack's own allowPadding default, this always runs with the one sensible
+# default behavior; nothing here has needed a Configure window yet.
+def concatenate(dfs: list[pd.DataFrame], params: dict[str, Any]) -> tuple[pd.DataFrame, list[str], list[str]]:
+    if len(dfs) < 2:
+        raise ValueError("Concatenate needs at least 2 connected tables.")
+    # sort=False keeps first-seen column order (every column from the
+    # first table, then any new ones the next table introduces, ...)
+    # rather than alphabetizing them.
+    result = pd.concat(dfs, ignore_index=True, sort=False)
+    result = result.fillna("")
+    return result, [], []
 
 
 # ── Filter Builder ───────────────────────────────────────────────────────
@@ -831,6 +856,315 @@ def cascade_fill(dfs: list[pd.DataFrame], params: dict[str, Any]) -> tuple[pd.Da
     return result, [], []
 
 
+# ── Add Column ───────────────────────────────────────────────────────────
+# Power Query's own "Add Custom Column": one new column computed from a
+# formula referencing other columns as [Column Name] (PQ's own bracket
+# syntax), one row at a time. Deliberately NOT a raw eval() of the user's
+# formula -- this parses it into a real Python AST (ast.parse) and only
+# ever walks/executes a small allow-listed subset of node types below,
+# rejecting everything else (imports, attribute access, arbitrary function
+# calls, ...) before a single row is touched. A local desktop app talking
+# only to itself lowers the stakes of a raw eval() here, but a formula box
+# a user pastes text into is still exactly the shape of input that
+# shouldn't get a blank check to run arbitrary code.
+class _FormulaError(ValueError):
+    pass
+
+
+_ALLOWED_BINOPS: dict[type, Callable[[Any, Any], Any]] = {
+    ast.Add: operator.add,
+    ast.Sub: operator.sub,
+    ast.Mult: operator.mul,
+    ast.Div: operator.truediv,
+    ast.Mod: operator.mod,
+    ast.Pow: operator.pow,
+}
+_ALLOWED_UNARYOPS: dict[type, Callable[[Any], Any]] = {
+    ast.UAdd: operator.pos,
+    ast.USub: operator.neg,
+}
+
+
+def _formula_to_number(v: Any) -> float:
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        raise _FormulaError(f'"{v}" isn\'t a number.')
+
+
+# PQ's own function names, uppercased to match its convention -- a small,
+# deliberately unsurprising set (string case/trim/length/slicing, string
+# joining, rounding, absolute value), not an attempt to cover everything
+# PQ's own M language offers.
+_FORMULA_FUNCTIONS: dict[str, Callable[..., Any]] = {
+    "UPPER": lambda s: str(s).upper(),
+    "LOWER": lambda s: str(s).lower(),
+    "TRIM": lambda s: str(s).strip(),
+    "LEN": lambda s: len(str(s)),
+    "CONCAT": lambda *args: "".join(str(a) for a in args),
+    "ROUND": lambda n, d=0: round(_formula_to_number(n), int(d)),
+    "LEFT": lambda s, n: str(s)[: int(n)],
+    "RIGHT": lambda s, n: str(s)[-int(n):] if int(n) > 0 else "",
+    "ABS": lambda n: abs(_formula_to_number(n)),
+}
+
+
+def _eval_formula_node(node: ast.AST, row_values: dict[str, Any]) -> Any:
+    if isinstance(node, ast.Expression):
+        return _eval_formula_node(node.body, row_values)
+    if isinstance(node, ast.Constant):
+        if isinstance(node.value, (int, float, str)):
+            return node.value
+        raise _FormulaError("Unsupported value in formula.")
+    if isinstance(node, ast.Name):
+        if node.id in row_values:
+            return row_values[node.id]
+        raise _FormulaError(f"Unknown reference in formula: {node.id}")
+    if isinstance(node, ast.BinOp) and type(node.op) in _ALLOWED_BINOPS:
+        left = _eval_formula_node(node.left, row_values)
+        right = _eval_formula_node(node.right, row_values)
+        # `+` between two strings (or a string and anything else) means
+        # concatenation, same as PQ's own `&` -- this app's [Column]
+        # syntax is friendlier without also requiring a second operator
+        # just for text.
+        if isinstance(node.op, ast.Add) and (isinstance(left, str) or isinstance(right, str)):
+            return str(left) + str(right)
+        return _ALLOWED_BINOPS[type(node.op)](_formula_to_number(left), _formula_to_number(right))
+    if isinstance(node, ast.UnaryOp) and type(node.op) in _ALLOWED_UNARYOPS:
+        return _ALLOWED_UNARYOPS[type(node.op)](_formula_to_number(_eval_formula_node(node.operand, row_values)))
+    if isinstance(node, ast.Call):
+        func_name = node.func.id if isinstance(node.func, ast.Name) else None
+        if not func_name or func_name not in _FORMULA_FUNCTIONS or node.keywords:
+            raise _FormulaError(f"Unknown function: {func_name or '?'}")
+        args = [_eval_formula_node(a, row_values) for a in node.args]
+        return _FORMULA_FUNCTIONS[func_name](*args)
+    raise _FormulaError("Unsupported formula syntax.")
+
+
+_COLUMN_REF_RE = re.compile(r"\[([^\]]+)\]")
+
+
+def _parse_formula(formula: str, columns: list[str]) -> tuple[ast.Expression, dict[str, str]]:
+    # Rewrites each [Column Name] reference into a safe Python identifier
+    # (ast.parse can't handle spaces/punctuation in names, which real
+    # extracted column names are full of) before parsing -- ref_map is
+    # handed to _eval_formula_node per row to resolve those back to real
+    # column values. The same [Column Name] reused twice in one formula
+    # reuses the same identifier rather than minting a new one each time.
+    ref_map: dict[str, str] = {}
+    id_by_column: dict[str, str] = {}
+
+    def _replace(m: re.Match) -> str:
+        col = m.group(1)
+        if col not in columns:
+            raise _FormulaError(f'Column "{col}" not found.')
+        if col in id_by_column:
+            return id_by_column[col]
+        sid = f"__col{len(ref_map)}"
+        ref_map[sid] = col
+        id_by_column[col] = sid
+        return sid
+
+    rewritten = _COLUMN_REF_RE.sub(_replace, formula)
+    try:
+        tree = ast.parse(rewritten, mode="eval")
+    except SyntaxError as e:
+        raise _FormulaError(f"Invalid formula: {e.msg}")
+    return tree, ref_map
+
+
+def add_column(dfs: list[pd.DataFrame], params: dict[str, Any]) -> tuple[pd.DataFrame, list[str], list[str]]:
+    if not dfs:
+        raise ValueError("Add Column needs a connected input table.")
+    df = dfs[0]
+    new_column_name = (params.get("columnName") or "").strip()
+    formula = (params.get("formula") or "").strip()
+    if not new_column_name:
+        raise ValueError("Give the new column a name.")
+    if not formula:
+        raise ValueError("Enter a formula for the new column.")
+
+    try:
+        tree, ref_map = _parse_formula(formula, list(df.columns))
+        values = []
+        for _, row in df.iterrows():
+            row_values = {sid: row[col] for sid, col in ref_map.items()}
+            values.append(_eval_formula_node(tree, row_values))
+    except _FormulaError as e:
+        raise ValueError(str(e))
+
+    final_name = new_column_name
+    n = 0
+    while final_name in df.columns:
+        n += 1
+        final_name = f"{new_column_name}_{n}"
+
+    result = df.copy()
+    result[final_name] = [str(v) for v in values]
+    return result, [], []
+
+
+# ── Unpivot Columns ──────────────────────────────────────────────────────
+# Power Query's own "Unpivot Columns" command: the selected columns become
+# two new columns (an attribute-name column and a value column), one output
+# row per original row x selected column -- every OTHER column stays as an
+# identifier, repeated across each of its original row's new unpivoted
+# rows. Selecting the columns to CONVERT (not the ones to keep) matches PQ's
+# literal "Unpivot Columns" menu item, as opposed to its separate "Unpivot
+# Other Columns" command.
+def unpivot_columns(dfs: list[pd.DataFrame], params: dict[str, Any]) -> tuple[pd.DataFrame, list[str], list[str]]:
+    if not dfs:
+        raise ValueError("Unpivot Columns needs a connected input table.")
+    df = dfs[0]
+    columns = [c for c in (params.get("columns") or []) if c in df.columns]
+    if not columns:
+        return df, [], []  # nothing selected yet -- pass through unchanged
+
+    id_columns = [c for c in df.columns if c not in columns]
+
+    # "Attribute"/"Value" are PQ's own default names for these two new
+    # columns -- bumped with a numeric suffix only if the SOURCE table
+    # already has an identifier column literally named that (renaming the
+    # user's own column to make room would be far more surprising than a
+    # slightly different name for the new one).
+    existing = set(id_columns)
+    def _pick_name(base: str) -> str:
+        name = base
+        n = 0
+        while name in existing:
+            n += 1
+            name = f"{base}_{n}"
+        return name
+    attr_name = _pick_name("Attribute")
+    existing.add(attr_name)
+    value_name = _pick_name("Value")
+
+    result = df.melt(id_vars=id_columns, value_vars=columns, var_name=attr_name, value_name=value_name)
+    return result, [], []
+
+
+# ── Pivot Columns ────────────────────────────────────────────────────────
+# The reverse of Unpivot Columns above (Power Query's own separate "Pivot
+# Column" command): pick a LABELS column (its own unique values become new
+# column headers) and a VALUES column (what lands under them). Every OTHER
+# column is an identifier -- rows sharing the same identifier(s) combine
+# into one output row, with each one's chosen label/value pair landing in
+# the matching new column.
+#
+# With NO other columns at all (this app's most common case in practice:
+# reconstructing an Unpivot Columns output back into its original wide
+# shape), there's no real identifier to group by -- rows are matched up
+# purely by POSITION instead, via each label's own running occurrence
+# count (groupby(...).cumcount()): the label sequence "amount, tax, net,
+# amount, tax, net, ..." naturally becomes one output row per full cycle
+# through the labels, values landing in the SAME order they appeared in
+# the source, not re-sorted. When identifier columns DO exist, the exact
+# same cumcount mechanism still applies (grouped by identifier+label this
+# time) -- it just always comes out as 0 there, since a real identifier
+# already makes each identifier+label combination naturally occur once.
+def pivot_columns(dfs: list[pd.DataFrame], params: dict[str, Any]) -> tuple[pd.DataFrame, list[str], list[str]]:
+    if not dfs:
+        raise ValueError("Pivot Columns needs a connected input table.")
+    df = dfs[0]
+    label_col = params.get("labelColumn")
+    value_col = params.get("valueColumn")
+    if not label_col or not value_col:
+        return df, [], []  # nothing selected yet -- pass through unchanged
+    if label_col not in df.columns or value_col not in df.columns:
+        raise ValueError("The selected columns aren't in the connected table.")
+    if label_col == value_col:
+        raise ValueError("Pick two different columns for labels and values.")
+
+    id_columns = [c for c in df.columns if c not in (label_col, value_col)]
+    work = df.copy()
+    group_keys = [*id_columns, label_col]
+    work["__seq"] = work.groupby(group_keys).cumcount()
+
+    index_cols = [*id_columns, "__seq"]
+    pivoted = work.pivot(index=index_cols, columns=label_col, values=value_col)
+    pivoted = pivoted.reset_index()
+    pivoted.columns.name = None
+
+    # pivot()'s own columns come back alphabetically sorted -- reordered to
+    # the label column's own first-appearance order instead, so "amount,
+    # tax, net" (the order they actually showed up in) doesn't silently
+    # become "amount, net, tax". Also drops the purely-technical __seq
+    # column here (by simply never including it), and index_cols'
+    # ordering above already makes __seq the LAST sort key, so a real
+    # identifier's own row order is preserved wherever ties exist.
+    label_order = list(dict.fromkeys(df[label_col].astype(str)))
+    ordered_cols = [*id_columns, *[c for c in label_order if c in pivoted.columns]]
+    pivoted = pivoted[ordered_cols]
+    pivoted.columns = _make_unique_column_names([str(c) for c in pivoted.columns])
+    return pivoted, [], []
+
+
+# ── Export ────────────────────────────────────────────────────────────────
+# The one sink node (nodeCatalog.ts's hasOutput: false) -- writes real
+# file(s) to disk on Run instead of producing a table for a downstream node
+# (the empty DataFrame returned below is just this shared pipeline's own
+# "no real output" value; routers/nodes.py's fillna/astype on it is a
+# harmless no-op). Runs directly against this machine's filesystem: this is
+# a desktop app, the backend and the Electron frontend it serves are always
+# the same machine, so `outputPath` (chosen via a native dialog on the
+# frontend, see electron/main.ts's export:chooseFile/chooseFolder) is
+# already a real, directly-writable local path -- no upload/download step.
+_INVALID_EXPORT_NAME_CHARS = re.compile(r'[\[\]:*?/\\]')
+
+
+def _safe_export_name(raw: str, index: int, max_length: int | None) -> str:
+    name = _INVALID_EXPORT_NAME_CHARS.sub("_", (raw or "").strip()) or f"Table_{index + 1}"
+    return name[:max_length] if max_length else name
+
+
+def export_data(dfs: list[pd.DataFrame], params: dict[str, Any]) -> tuple[pd.DataFrame, list[str], list[str]]:
+    if not dfs:
+        raise ValueError("Export needs at least one connected table.")
+    output_path = (params.get("outputPath") or "").strip()
+    if not output_path:
+        raise ValueError("Choose an export location first.")
+    fmt = params.get("format", "xlsx")
+
+    raw_names = [df.attrs.get("name") or f"Table_{i + 1}" for i, df in enumerate(dfs)]
+    # Excel sheet names can't contain [ ] : * ? / \ and are capped at 31
+    # characters -- truncated to 28 here (not csv, which has no such cap)
+    # so a _make_unique_column_names dedup suffix (_1, _2, ...) still fits
+    # within that cap for any realistic table count.
+    max_len = 28 if fmt == "xlsx" else None
+    sanitized = [_safe_export_name(n, i, max_len) for i, n in enumerate(raw_names)]
+    names = _make_unique_column_names(sanitized)
+
+    info: list[str] = []
+    try:
+        if fmt == "csv":
+            # A CSV can only ever hold one table -- one file per connected
+            # table into the chosen folder, named after each table.
+            folder = Path(output_path)
+            for df, name in zip(dfs, names):
+                df.to_csv(folder / f"{name}.csv", index=False)
+            info.append(f"Exported {len(dfs)} file(s) to {output_path}")
+        else:
+            # Excel can hold all of them -- each connected table becomes
+            # its own sheet in one workbook.
+            with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
+                for df, name in zip(dfs, names):
+                    df.to_excel(writer, sheet_name=name, index=False)
+            info.append(f"Exported {len(dfs)} table(s) to {output_path}")
+    except PermissionError:
+        # The single most common reason a real file can't be overwritten:
+        # it's currently open in Excel (or another program) holding an
+        # exclusive lock -- there's no way to force that write through, so
+        # this turns the OS's own cryptic [Errno 13] message into the
+        # actual actionable instruction (this matters more here than for
+        # any other node's transform: Export is the only one Autosave can
+        # trigger unattended on every upstream data change, so this is the
+        # error a user is most likely to see with no one having just
+        # clicked Run themselves to explain the context).
+        raise ValueError(f"Couldn't overwrite {output_path} -- close it if it's currently open, then try again.")
+
+    return pd.DataFrame(), [], info
+
+
 NODE_TRANSFORMS: dict[str, Callable[[list[pd.DataFrame], dict[str, Any]], tuple[pd.DataFrame, list[str], list[str]]]] = {
     "horizontal_stack": horizontal_stack,
     "filter_builder": filter_builder,
@@ -844,4 +1178,9 @@ NODE_TRANSFORMS: dict[str, Callable[[list[pd.DataFrame], dict[str, Any]], tuple[
     "change_type": change_type,
     "cascade_fill": cascade_fill,
     "extract_regex": extract_regex,
+    "export_data": export_data,
+    "unpivot_columns": unpivot_columns,
+    "pivot_columns": pivot_columns,
+    "add_column": add_column,
+    "concatenate": concatenate,
 }

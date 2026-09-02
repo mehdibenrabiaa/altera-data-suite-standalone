@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 
-import type { SettingsPayload, PersistedSettings, FilterBuilderParams, FilterColumnDefinition, HeaderPromoterParams, MergeParams, ShiftColumnsParams, CleanerParams, UniqueParams, ColumnEditParams, ChangeTypeParams, RegexParams, CascadeFillParams } from "./types";
+import type { SettingsPayload, PersistedSettings, FilterBuilderParams, FilterColumnDefinition, HeaderPromoterParams, MergeParams, ShiftColumnsParams, CleanerParams, UniqueParams, ColumnEditParams, ChangeTypeParams, RegexParams, CascadeFillParams, ExportParams, UnpivotColumnsParams, PivotColumnsParams, AddColumnParams } from "./types";
 import type { AppliedColumnType } from "./columnTypeDetection";
 
 // Mirrors the original devkit/filter-builder project's own ExtraColumnDef
@@ -177,6 +177,73 @@ export interface CascadeFillAppliedPayload {
   params: CascadeFillParams;
 }
 
+// Export's Configure window just needs to know what's currently connected
+// (a name per table, for the "Exporting N table(s): ..." list -- no
+// columns/rows, there's nothing here to preview or configure per-column)
+// plus whatever's already saved so reopening restores the prior format/
+// output path. tableNames deliberately doesn't require a real Convert to
+// have happened first (unlike resolveNodeInputs elsewhere) -- picking an
+// export format/location has no need for actual data yet.
+export interface ExportWindowPayload {
+  nodeId: string;
+  nodeName: string;
+  tableNames: string[];
+  initialParams: ExportParams;
+}
+export interface ExportAppliedPayload {
+  nodeId: string;
+  params: ExportParams;
+}
+
+// Unpivot Columns' Configure window just needs the resolved input's column
+// names and row COUNT (not the actual row values -- unlike CascadeFillWindow's
+// live stat, "new row count" only needs total rows x selected columns, no
+// per-cell inspection) plus whatever's already saved so reopening restores
+// the prior column selection.
+export interface UnpivotColumnsWindowPayload {
+  nodeId: string;
+  nodeName: string;
+  columns: string[];
+  rowCount: number;
+  initialParams: UnpivotColumnsParams;
+}
+export interface UnpivotColumnsAppliedPayload {
+  nodeId: string;
+  params: UnpivotColumnsParams;
+}
+
+// Pivot Columns' Configure window just needs the resolved input's column
+// names (for the two label/value pickers) plus whatever's already saved
+// so reopening restores the prior selection.
+export interface PivotColumnsWindowPayload {
+  nodeId: string;
+  nodeName: string;
+  columns: string[];
+  initialParams: PivotColumnsParams;
+}
+export interface PivotColumnsAppliedPayload {
+  nodeId: string;
+  params: PivotColumnsParams;
+}
+
+// Add Column's Configure window needs the resolved input's column names
+// (for the clickable "insert [Column]" reference list) plus whatever's
+// already saved so reopening restores the prior name/formula. No rows --
+// there's no live per-row preview grid, the real formula only ever
+// actually runs in the backend (see AddColumnParams's own comment); a
+// formula error surfaces the same way any other node's does, through the
+// existing Run error badge/log.
+export interface AddColumnWindowPayload {
+  nodeId: string;
+  nodeName: string;
+  columns: string[];
+  initialParams: AddColumnParams;
+}
+export interface AddColumnAppliedPayload {
+  nodeId: string;
+  params: AddColumnParams;
+}
+
 declare global {
   interface Window {
     alteraStudio: {
@@ -351,10 +418,75 @@ declare global {
       applyCascadeFill: (payload: CascadeFillAppliedPayload) => void;
       closeCascadeFillWindow: () => void;
 
+      // Main window: open (or focus/reseed) the separate Export configure
+      // window for one node -- same real-window pattern as Filter
+      // Builder/Header Promoter/Merge/Shift Columns/Cleaner/Unique/Column
+      // Edit/Change Type/Regex/Cascade Fill above, including round-
+      // tripping edits back on Apply.
+      openExportWindow: (payload: ExportWindowPayload) => void;
+      onExportApplied: (cb: (payload: ExportAppliedPayload) => void) => () => void;
+      // Export window only -- nodeId is which one of potentially several
+      // open Configure windows this is (read from this window's own
+      // URL, same reasoning as requestFilterBuilderInit above).
+      requestExportInit: (nodeId: string) => Promise<ExportWindowPayload>;
+      onExportInit: (cb: (payload: ExportWindowPayload) => void) => () => void;
+      applyExport: (payload: ExportAppliedPayload) => void;
+      closeExportWindow: () => void;
+      // Export window only -- native Save/folder pickers for outputPath.
+      // Two separate methods (not one that branches internally) since xlsx
+      // wants a single new/existing FILE (showSaveDialog) and csv wants an
+      // existing FOLDER (showOpenDialog's openDirectory mode) -- genuinely
+      // different native dialogs, not just a filter difference.
+      chooseExportFile: () => Promise<string | null>;
+      chooseExportFolder: () => Promise<string | null>;
+
+      // Main window: open (or focus/reseed) the separate Unpivot Columns
+      // configure window for one node -- same real-window pattern as every
+      // other Configure window above, including round-tripping edits back
+      // on Apply.
+      openUnpivotColumnsWindow: (payload: UnpivotColumnsWindowPayload) => void;
+      onUnpivotColumnsApplied: (cb: (payload: UnpivotColumnsAppliedPayload) => void) => () => void;
+      // Unpivot Columns window only -- nodeId is which one of potentially
+      // several open Configure windows this is (read from this window's
+      // own URL, same reasoning as requestFilterBuilderInit above).
+      requestUnpivotColumnsInit: (nodeId: string) => Promise<UnpivotColumnsWindowPayload>;
+      onUnpivotColumnsInit: (cb: (payload: UnpivotColumnsWindowPayload) => void) => () => void;
+      applyUnpivotColumns: (payload: UnpivotColumnsAppliedPayload) => void;
+      closeUnpivotColumnsWindow: () => void;
+
+      // Main window: open (or focus/reseed) the separate Pivot Columns
+      // configure window for one node -- same real-window pattern as
+      // every other Configure window above, including round-tripping
+      // edits back on Apply.
+      openPivotColumnsWindow: (payload: PivotColumnsWindowPayload) => void;
+      onPivotColumnsApplied: (cb: (payload: PivotColumnsAppliedPayload) => void) => () => void;
+      // Pivot Columns window only -- nodeId is which one of potentially
+      // several open Configure windows this is (read from this window's
+      // own URL, same reasoning as requestFilterBuilderInit above).
+      requestPivotColumnsInit: (nodeId: string) => Promise<PivotColumnsWindowPayload>;
+      onPivotColumnsInit: (cb: (payload: PivotColumnsWindowPayload) => void) => () => void;
+      applyPivotColumns: (payload: PivotColumnsAppliedPayload) => void;
+      closePivotColumnsWindow: () => void;
+
+      // Main window: open (or focus/reseed) the separate Add Column
+      // configure window for one node -- same real-window pattern as
+      // every other Configure window above, including round-tripping
+      // edits back on Apply.
+      openAddColumnWindow: (payload: AddColumnWindowPayload) => void;
+      onAddColumnApplied: (cb: (payload: AddColumnAppliedPayload) => void) => () => void;
+      // Add Column window only -- nodeId is which one of potentially
+      // several open Configure windows this is (read from this window's
+      // own URL, same reasoning as requestFilterBuilderInit above).
+      requestAddColumnInit: (nodeId: string) => Promise<AddColumnWindowPayload>;
+      onAddColumnInit: (cb: (payload: AddColumnWindowPayload) => void) => () => void;
+      applyAddColumn: (payload: AddColumnAppliedPayload) => void;
+      closeAddColumnWindow: () => void;
+
       // Main window: closes whichever kept-alive per-node window
       // (Configure, Browse, Header Promoter, Merge, Shift Columns,
-      // Cleaner, Unique, Column Edit, Change Type, or Regular
-      // Expressions) is currently showing this node, if any.
+      // Cleaner, Unique, Column Edit, Change Type, Regular Expressions,
+      // Cascade Fill, Export, Unpivot Columns, or Add Column) is currently
+      // showing this node, if any.
       notifyNodeDeleted: (nodeId: string) => void;
     };
   }

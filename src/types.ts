@@ -454,6 +454,62 @@ export interface CascadeFillParams {
   customNulls: string[];
 }
 
+// Export's params -- the one sink node (nodeCatalog.ts's hasOutput: false),
+// so unlike every other node's params these describe WHERE to write, not
+// how to transform. "xlsx": outputPath is a single .xlsx FILE (every
+// connected table becomes its own sheet, see backend/app/nodes.py's
+// export_data). "csv": outputPath is a FOLDER instead (a CSV can only ever
+// hold one table, so a multi-table export writes one file per table into
+// it, named after each table -- see this node's own Configure window for
+// why the picker itself already branches on format).
+export type ExportFormat = "xlsx" | "csv";
+export interface ExportParams {
+  format: ExportFormat;
+  outputPath: string;
+  // Off by default -- Export re-writing a real file on disk is a bigger
+  // deal than every other node's auto-run (which only ever touches
+  // in-memory preview data), so unlike them it doesn't auto-run just
+  // because RUNNABLE_NODE_KINDS includes it; SchemaView.tsx's auto-run
+  // effect also requires this to be true. A manual right-click Run always
+  // still works regardless of this setting.
+  autosave?: boolean;
+}
+
+// Unpivot Columns' params -- Power Query's own "Unpivot Columns" command
+// (backend/app/nodes.py's unpivot_columns): the selected columns become
+// two new rows-per-original-row columns ("Attribute"/"Value", PQ's own
+// default names), every OTHER column stays as an identifier repeated
+// across its row's new unpivoted rows. Only the columns to CONVERT are
+// picked here, matching PQ's literal "Unpivot Columns" command (as
+// opposed to its separate "Unpivot Other Columns" one).
+export interface UnpivotColumnsParams {
+  columns: string[];
+}
+
+// Pivot Columns' params -- Power Query's own "Pivot Column" command, the
+// reverse of Unpivot Columns above (backend/app/nodes.py's pivot_columns):
+// labelColumn's own unique values become new column headers, valueColumn's
+// values land under them. Every OTHER column is an identifier rows get
+// grouped by -- with no other columns at all (this app's most common case:
+// reconstructing an Unpivot Columns output back to its original wide
+// shape), rows are matched up purely by each label's own occurrence
+// position instead, see that function's own comment.
+export interface PivotColumnsParams {
+  labelColumn: string;
+  valueColumn: string;
+}
+
+// Add Column's params -- Power Query's own "Add Custom Column": one new
+// column computed from `formula`, which references other columns with
+// PQ's own [Column Name] bracket syntax (backend/app/nodes.py's
+// add_column parses and safely evaluates it, one row at a time -- see its
+// own comment for the supported operators/functions and why it's not a
+// raw eval()).
+export interface AddColumnParams {
+  columnName: string;
+  formula: string;
+}
+
 // Column "type" for a Configure dialog's per-column operator/value-editor
 // choice -- this app's tables are plain {columns, rows} strings with no
 // schema (unlike the original's Orange Domain), so type is inferred from

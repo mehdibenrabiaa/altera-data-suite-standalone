@@ -32,6 +32,62 @@ def make_unique_column_names(columns) -> list:
     return unique
 
 
+def _split_words_at_column_guides(page, words, col_xs):
+    """A PDF "word" from get_text("words") is an unbroken, whitespace-free
+    run of text -- word-level extraction alone can never split inside one,
+    so a column guide dropped over e.g. the "--" in a date range like
+    "2025-11-01--2025-11-30" leaves the whole token on whichever side its
+    CENTER lands on, no matter how precisely the guide is placed. For a
+    word whose bbox straddles one or more guides, re-fetch it at character
+    granularity (get_text("rawdict") gives real per-character bboxes,
+    unlike "words") and cut it at the character nearest each guide, so a
+    guide splits exactly where it visually looks like it should. Only
+    meaningful for unrotated pages (rot 0) -- the guide x-positions and a
+    word's own x0/x1 live in the same axis there; rotated pages keep the
+    original whole-word behavior rather than re-deriving this per rotation.
+    """
+    if not col_xs:
+        return words
+    out = []
+    for w in words:
+        x0, y0, x1, y1, text = w[0], w[1], w[2], w[3], w[4]
+        crossing = sorted(gx for gx in col_xs if x0 < gx < x1)
+        if not crossing:
+            out.append(w)
+            continue
+        rd = page.get_text("rawdict", clip=fitz.Rect(x0, y0, x1, y1))
+        chars = []
+        for block in rd.get("blocks", []):
+            for line in block.get("lines", []):
+                for span in line.get("spans", []):
+                    chars.extend(span.get("chars", []))
+        if len(chars) < 2:
+            out.append(w)
+            continue
+        chars.sort(key=lambda c: c["bbox"][0])
+        pieces, cur, bi = [], [], 0
+        for ch in chars:
+            cx = (ch["bbox"][0] + ch["bbox"][2]) / 2
+            while bi < len(crossing) and cx > crossing[bi]:
+                if cur:
+                    pieces.append(cur)
+                    cur = []
+                bi += 1
+            cur.append(ch)
+        if cur:
+            pieces.append(cur)
+        if len(pieces) < 2:
+            out.append(w)
+            continue
+        for piece in pieces:
+            px0 = min(c["bbox"][0] for c in piece)
+            py0 = min(c["bbox"][1] for c in piece)
+            px1 = max(c["bbox"][2] for c in piece)
+            py1 = max(c["bbox"][3] for c in piece)
+            out.append((px0, py0, px1, py1, "".join(c["c"] for c in piece), 0, 0, 0))
+    return out
+
+
 def _h2_fitz(file_path, page_num, table_area_coords, column_coords):
     """PyMuPDF text extraction that handles any page rotation (0/90/180/270).
 
@@ -60,6 +116,8 @@ def _h2_fitz(file_path, page_num, table_area_coords, column_coords):
         clip = fitz.Rect(x0, mh - cy1, x1, mh - cy0)
 
     words = page.get_text("words", clip=clip)
+    if rot == 0:
+        words = _split_words_at_column_guides(page, words, col_xs)
     doc.close()
     if not words:
         return None
@@ -167,7 +225,30 @@ def _h2_fitz(file_path, page_num, table_area_coords, column_coords):
             idx = _ci(w)
             cells[idx] = (cells[idx] + " " + w[4]).strip()
         data.append(cells)
+    data = _merge_wrapped_continuation_rows(data)
     return pd.DataFrame(data, columns=[f"Column_{i+1}" for i in range(nc)])
+
+
+def _merge_wrapped_continuation_rows(data):
+    """Row-clustering here is purely y-position based (there are no user-
+    drawn row guides, only column ones), so a cell whose text wraps onto a
+    second visual line gets clustered as its own "row" -- one with real
+    text in a single column and nothing in any other, immediately after a
+    row that already has content in that same column. That phantom row is
+    almost certainly the wrapped continuation of the row above it, not a
+    new logical row, so fold it back in rather than emitting it as its own
+    mostly-blank row (which otherwise makes every other column look like
+    it lost real data on that line).
+    """
+    merged = []
+    for cells in data:
+        nonempty = [i for i, c in enumerate(cells) if c]
+        if merged and len(nonempty) == 1 and merged[-1][nonempty[0]]:
+            i = nonempty[0]
+            merged[-1][i] = (merged[-1][i] + " " + cells[i]).strip()
+        else:
+            merged.append(cells)
+    return merged
 
 
 def _h2(file_path, page_num, tables_info, dpi, occurrence_order=False):

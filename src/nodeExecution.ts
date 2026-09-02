@@ -15,6 +15,10 @@ export interface NodeTableInput {
   // Type's own output feeding into a downstream node's resolved input),
   // even though no node transform reads it; it's display-only metadata.
   columnTypes?: Record<string, AppliedColumnType>;
+  // The source table/node's own display name -- only Export's backend
+  // transform reads this (each output sheet/file is named after its
+  // source), optional everywhere else.
+  name?: string;
 }
 
 export interface RunNodeResult {

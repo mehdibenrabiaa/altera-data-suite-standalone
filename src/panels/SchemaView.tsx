@@ -30,7 +30,7 @@ import { Spin } from "antd";
 import { LoadingOutlined } from "@ant-design/icons";
 import { AgGridReact } from "ag-grid-react";
 import { ModuleRegistry, AllCommunityModule, themeQuartz, type ColDef } from "ag-grid-community";
-import type { Rectangle, Group, SchemaPreviewTable, ProcessorNodeInstance, FilterBuilderParams, FilterColumnDefinition, HeaderPromoterParams, MergeParams, ShiftColumnsParams, CleanerParams, UniqueParams, ColumnEditParams, ChangeTypeParams, RegexParams, CascadeFillParams, NodeLogEntry } from "../types";
+import type { Rectangle, Group, SchemaPreviewTable, ProcessorNodeInstance, FilterBuilderParams, FilterColumnDefinition, HeaderPromoterParams, MergeParams, ShiftColumnsParams, CleanerParams, UniqueParams, ColumnEditParams, ChangeTypeParams, RegexParams, CascadeFillParams, ExportParams, UnpivotColumnsParams, PivotColumnsParams, AddColumnParams, NodeLogEntry } from "../types";
 import { computeDefaultMatchPair } from "../mergeDefaults";
 import {
   NODE_DRAG_MIME,
@@ -49,7 +49,7 @@ import { TypedColumnHeader } from "../columnTypeIcons";
 // (backend/app/nodes.py's NODE_TRANSFORMS registry) -- gates the "Run"
 // context-menu item so it only appears on nodes that can really execute.
 // Extend both maps together as more real nodes come online.
-const RUNNABLE_NODE_KINDS = new Set(["Horizontal Stack", "Filter Builder", "Header Promoter", "Index Column", "Merge", "Shift Columns", "Cleaner", "Unique", "Column Edit", "Change Type", "Regular Expressions", "Cascade Fill"]);
+const RUNNABLE_NODE_KINDS = new Set(["Horizontal Stack", "Filter Builder", "Header Promoter", "Index Column", "Merge", "Shift Columns", "Cleaner", "Unique", "Column Edit", "Change Type", "Regular Expressions", "Cascade Fill", "Export", "Unpivot Columns", "Pivot Columns", "Add Column", "Concatenate"]);
 const NODE_KIND_SLUGS: Record<string, string> = {
   "Horizontal Stack": "horizontal_stack",
   "Filter Builder": "filter_builder",
@@ -63,6 +63,11 @@ const NODE_KIND_SLUGS: Record<string, string> = {
   "Change Type": "change_type",
   "Regular Expressions": "extract_regex",
   "Cascade Fill": "cascade_fill",
+  "Export": "export_data",
+  "Unpivot Columns": "unpivot_columns",
+  "Pivot Columns": "pivot_columns",
+  "Add Column": "add_column",
+  "Concatenate": "concatenate",
 };
 // Minimum resolved (primary) inputs a kind needs before it's worth
 // running -- Horizontal Stack needs 2+ tables to combine, Filter Builder
@@ -75,7 +80,7 @@ const NODE_KIND_SLUGS: Record<string, string> = {
 // the backend (merge_data raises if fewer than 2 tables arrive). Shift
 // Columns, Cleaner, Unique, Column Edit, Change Type, and Regular
 // Expressions likewise only ever transform a single table.
-const NODE_MIN_INPUTS: Record<string, number> = { "Horizontal Stack": 2, "Filter Builder": 1, "Header Promoter": 1, "Index Column": 1, "Merge": 1, "Shift Columns": 1, "Cleaner": 1, "Unique": 1, "Column Edit": 1, "Change Type": 1, "Regular Expressions": 1 };
+const NODE_MIN_INPUTS: Record<string, number> = { "Horizontal Stack": 2, "Filter Builder": 1, "Header Promoter": 1, "Index Column": 1, "Merge": 1, "Shift Columns": 1, "Cleaner": 1, "Unique": 1, "Column Edit": 1, "Change Type": 1, "Regular Expressions": 1, "Concatenate": 2 };
 
 // Catalog widget names with their own dedicated window -- every node here
 // gets a real separate BrowserWindow (see FilterBuilderWindow.tsx/
@@ -99,6 +104,10 @@ const NODE_WINDOW_LABEL: Record<string, string> = {
   "Change Type": "Configure…",
   "Regular Expressions": "Configure…",
   "Cascade Fill": "Configure…",
+  "Export": "Configure…",
+  "Unpivot Columns": "Configure…",
+  "Pivot Columns": "Configure…",
+  "Add Column": "Configure…",
 };
 const NODE_KINDS_WITH_WINDOW = new Set(Object.keys(NODE_WINDOW_LABEL));
 
@@ -185,7 +194,20 @@ const outputGridTheme = themeQuartz.withParams({
 // every render (a fresh `{...}` literal there wouldn't itself force a
 // row-model re-diff the way a new `rowData` reference does, but it's the
 // same cheap-to-avoid churn as the rest of the fixes just above).
-const outputGridDefaultColDef: ColDef = { resizable: true, sortable: false, suppressMovable: true };
+// cellDataType forced to "text": every value here is already a plain string
+// straight from the backend (Python's own .astype(str)/.fillna("")) -- but
+// AG-Grid's own automatic column-type inference doesn't know that, and
+// guesses per-column from the DATA (e.g. a column whose first sample value
+// happens to look like a date gets inferred as a `date` column). Any later
+// value in that same column that isn't a real parseable date -- e.g. a
+// date-RANGE string like "2025-11-01--2025-11-30" -- then fails AG-Grid's
+// own date value-parser and renders as a blank cell, even though the real
+// string is sitting right there in rowData. Confirmed live: a user's PDF
+// table had a plain date in row 1 of a column and range strings in rows
+// 2-3 -- rows 2-3 rendered empty while the backend trace showed the real
+// values reaching the frontend untouched. Forcing text type here means
+// every cell is shown exactly as the backend sent it, with no guessing.
+const outputGridDefaultColDef: ColDef = { resizable: true, sortable: true, suppressMovable: true, cellDataType: "text" };
 // AG-Grid's own Excel-style row-number column (the `rowNumbers` grid
 // option) is an Enterprise-only feature -- this project only has the
 // Community package, so a plain pinned column reading the row's own index
@@ -1913,7 +1935,28 @@ export default function SchemaView({
   // why that replaced name-keying) -- and a table card's node id already
   // IS that rect id, so it's read straight off `sourceId`, no
   // displayTables round-trip needed for this part.
-  const resolveNodeInputs = useCallback((id: string): NodeTableInput[] => {
+  // Resolves an edge source's own display name -- a table (sourceId is a
+  // rect id) shows its rectangle's name, an upstream processor node
+  // (node-to-node chaining) shows its own display name. Currently only
+  // Export's backend transform reads this (each output sheet/file is named
+  // after its source), but it's stamped onto every node's resolved inputs
+  // below rather than kept as a separate Export-only path, since it's a
+  // harmless, ignored extra field for every other node's transform.
+  const resolveSourceName = useCallback((sourceId: string): string => {
+    const rect = rectById.get(sourceId);
+    if (rect) return rect.name || rect.id;
+    const proc = processorNodes.find((p) => p.id === sourceId);
+    if (proc) return proc.name || proc.catalogName;
+    return sourceId;
+  }, [rectById, processorNodes]);
+
+  // The ordered list of a node's connected source ids (top-to-bottom by
+  // canvas position) -- shared by resolveNodeInputs below (needs the
+  // actual converted data) and resolveConnectedTableNames further down
+  // (just needs the names, e.g. for Export's Configure window, which
+  // shouldn't require a real Convert to have happened first just to pick
+  // a format/location).
+  const getOrderedSourceIds = useCallback((id: string): string[] => {
     // Excludes edges into the "extra" handle (Filter Builder's square
     // Extra Data port, see resolveExtraDataInput below) -- those aren't
     // another table to treat the same way as the primary inputs, so they
@@ -1921,15 +1964,18 @@ export default function SchemaView({
     const sourceIds = Array.from(
       new Set(edges.filter((e) => e.target === id && e.targetHandle !== "extra").map((e) => e.source)),
     );
-    const ordered = sourceIds
+    return sourceIds
       .map((sourceId) => ({ sourceId, y: nodesRef.current.find((n) => n.id === sourceId)?.position.y ?? 0 }))
       .sort((a, b) => a.y - b.y)
       .map((s) => s.sourceId);
+  }, [edges]);
+
+  const resolveNodeInputs = useCallback((id: string): NodeTableInput[] => {
     const inputs: NodeTableInput[] = [];
-    for (const sourceId of ordered) {
+    for (const sourceId of getOrderedSourceIds(id)) {
       const converted = convertedTables[sourceId];
       if (converted) {
-        inputs.push(converted);
+        inputs.push({ ...converted, name: resolveSourceName(sourceId) });
         continue;
       }
       // Not a table -- the source may be another processor node instead
@@ -1940,10 +1986,18 @@ export default function SchemaView({
       // normal thing to draw, so its upstream run result needs to resolve
       // here too, not just raw converted tables.
       const upstreamOutput = nodeOutputs[sourceId];
-      if (upstreamOutput) inputs.push(upstreamOutput);
+      if (upstreamOutput) inputs.push({ ...upstreamOutput, name: resolveSourceName(sourceId) });
     }
     return inputs;
-  }, [edges, convertedTables, nodeOutputs]);
+  }, [convertedTables, nodeOutputs, getOrderedSourceIds, resolveSourceName]);
+
+  // Export's Configure window preview list -- deliberately doesn't require
+  // a real Convert (unlike resolveNodeInputs above): picking an export
+  // format/location has no need for actual data yet, just to know what's
+  // connected and what to call it.
+  const resolveConnectedTableNames = useCallback((id: string): string[] => {
+    return getOrderedSourceIds(id).map(resolveSourceName);
+  }, [getOrderedSourceIds, resolveSourceName]);
 
   // Resolves whatever's connected to a node's square "Extra Data" input
   // (currently just Filter Builder) -- kept separate from resolveNodeInputs
@@ -2171,6 +2225,76 @@ export default function SchemaView({
   }, [processorNodes, resolveNodeInputs, closeNodeCtxMenu]);
 
   // Opens (or focuses/reseeds) the node's Configure window -- same real-
+  // window, snapshot-on-open pattern as the others above. Unlike every
+  // other one of these, it only needs table NAMES (resolveConnectedTableNames,
+  // not resolveNodeInputs) -- Export has no columns/rows to preview or
+  // configure per-column, and picking a format/location shouldn't require
+  // a real Convert to have happened first.
+  const handleOpenExport = useCallback((id: string) => {
+    const proc = processorNodes.find((p) => p.id === id);
+    if (!proc) return;
+    window.alteraStudio.openExportWindow({
+      nodeId: id,
+      nodeName: proc.name || proc.catalogName,
+      tableNames: resolveConnectedTableNames(id),
+      initialParams: (proc.params as ExportParams | undefined) ?? { format: "xlsx", outputPath: "" },
+    });
+    closeNodeCtxMenu();
+  }, [processorNodes, resolveConnectedTableNames, closeNodeCtxMenu]);
+
+  // Opens (or focuses/reseeds) the node's Configure window -- same real-
+  // window, snapshot-on-open pattern as the others above. Only needs the
+  // primary input's column names and row COUNT (not the actual row
+  // values) -- the live "rows after unpivot" stat is pure arithmetic
+  // (total rows x selected columns), no per-cell inspection needed.
+  const handleOpenUnpivotColumns = useCallback((id: string) => {
+    const proc = processorNodes.find((p) => p.id === id);
+    if (!proc) return;
+    const primary = resolveNodeInputs(id)[0];
+    window.alteraStudio.openUnpivotColumnsWindow({
+      nodeId: id,
+      nodeName: proc.name || proc.catalogName,
+      columns: primary?.columns ?? [],
+      rowCount: primary?.rows.length ?? 0,
+      initialParams: (proc.params as UnpivotColumnsParams | undefined) ?? { columns: [] },
+    });
+    closeNodeCtxMenu();
+  }, [processorNodes, resolveNodeInputs, closeNodeCtxMenu]);
+
+  // Opens (or focuses/reseeds) the node's Configure window -- same real-
+  // window, snapshot-on-open pattern as the others above. Only needs the
+  // primary input's column names, for the two label/value pickers.
+  const handleOpenPivotColumns = useCallback((id: string) => {
+    const proc = processorNodes.find((p) => p.id === id);
+    if (!proc) return;
+    const primary = resolveNodeInputs(id)[0];
+    window.alteraStudio.openPivotColumnsWindow({
+      nodeId: id,
+      nodeName: proc.name || proc.catalogName,
+      columns: primary?.columns ?? [],
+      initialParams: (proc.params as PivotColumnsParams | undefined) ?? { labelColumn: "", valueColumn: "" },
+    });
+    closeNodeCtxMenu();
+  }, [processorNodes, resolveNodeInputs, closeNodeCtxMenu]);
+
+  // Opens (or focuses/reseeds) the node's Configure window -- same real-
+  // window, snapshot-on-open pattern as the others above. Only needs the
+  // primary input's column names (for the clickable reference list) --
+  // there's no live preview grid, see AddColumnWindow.tsx's own comment.
+  const handleOpenAddColumn = useCallback((id: string) => {
+    const proc = processorNodes.find((p) => p.id === id);
+    if (!proc) return;
+    const primary = resolveNodeInputs(id)[0];
+    window.alteraStudio.openAddColumnWindow({
+      nodeId: id,
+      nodeName: proc.name || proc.catalogName,
+      columns: primary?.columns ?? [],
+      initialParams: (proc.params as AddColumnParams | undefined) ?? { columnName: "", formula: "" },
+    });
+    closeNodeCtxMenu();
+  }, [processorNodes, resolveNodeInputs, closeNodeCtxMenu]);
+
+  // Opens (or focuses/reseeds) the node's Configure window -- same real-
   // window, snapshot-on-open pattern as the others above. Needs the
   // primary input's ROWS too (not just column names) so the live
   // match-preview grid has real data to highlight.
@@ -2275,8 +2399,12 @@ export default function SchemaView({
     else if (proc?.catalogName === "Change Type") handleOpenChangeType(id);
     else if (proc?.catalogName === "Regular Expressions") handleOpenRegex(id);
     else if (proc?.catalogName === "Cascade Fill") handleOpenCascadeFill(id);
+    else if (proc?.catalogName === "Export") handleOpenExport(id);
+    else if (proc?.catalogName === "Unpivot Columns") handleOpenUnpivotColumns(id);
+    else if (proc?.catalogName === "Pivot Columns") handleOpenPivotColumns(id);
+    else if (proc?.catalogName === "Add Column") handleOpenAddColumn(id);
     else handleOpenFilterBuilder(id);
-  }, [processorNodes, handleOpenBrowse, handleOpenHeaderPromoter, handleOpenMerge, handleOpenShiftColumns, handleOpenCleaner, handleOpenUnique, handleOpenColumnEdit, handleOpenChangeType, handleOpenRegex, handleOpenCascadeFill, handleOpenFilterBuilder, onNodesChange]);
+  }, [processorNodes, handleOpenBrowse, handleOpenHeaderPromoter, handleOpenMerge, handleOpenShiftColumns, handleOpenCleaner, handleOpenUnique, handleOpenColumnEdit, handleOpenChangeType, handleOpenRegex, handleOpenCascadeFill, handleOpenExport, handleOpenUnpivotColumns, handleOpenPivotColumns, handleOpenAddColumn, handleOpenFilterBuilder, onNodesChange]);
 
   // `select`: only true for a user-initiated single-node run (the context
   // menu's "Run"), which is the one case selecting the node to show its
@@ -2457,9 +2585,31 @@ export default function SchemaView({
   // because this effect's OTHER dependencies (e.g. `nodes`, touched by this
   // same run's own auto-select-on-success) changed for an unrelated reason.
   const lastAutoRunInputsRef = useRef<Record<string, string>>({});
+  // Export-only: the params considered the last time THIS effect looked at
+  // this node, regardless of whether a run actually got enqueued for it --
+  // lets a fresh Apply be told apart from an upstream data change below
+  // (see that comment for why the two need different gating).
+  const lastExportParamsRef = useRef<Record<string, string>>({});
   useEffect(() => {
     processorNodes.forEach((proc) => {
       if (!RUNNABLE_NODE_KINDS.has(proc.catalogName)) return;
+      if (proc.catalogName === "Export") {
+        const paramsJson = JSON.stringify(proc.params ?? {});
+        const paramsChanged = lastExportParamsRef.current[proc.id] !== paramsJson;
+        lastExportParamsRef.current[proc.id] = paramsJson;
+        // Export writes a real file to disk, silently overwriting whatever
+        // was there -- unlike every other node's auto-run (which only ever
+        // recomputes in-memory preview data), that's not something to do
+        // just because an upstream table happened to change, unless the
+        // user explicitly opted in via its own Autosave checkbox. Hitting
+        // Apply is a different, explicit "export now" action though (doing
+        // nothing until a separate manual Run made no sense, reported as
+        // exactly that) -- so a just-changed params (paramsChanged, this
+        // covers Apply) always still runs once regardless of Autosave;
+        // only a LATER change to the upstream data with the SAME params is
+        // what Autosave actually gates.
+        if (!paramsChanged && !(proc.params as ExportParams | undefined)?.autosave) return;
+      }
       if (nodeRunStatus[proc.id]?.state === "running") return;
       const inputs = resolveNodeInputs(proc.id);
       if (inputs.length < (NODE_MIN_INPUTS[proc.catalogName] ?? 1)) {
@@ -2690,6 +2840,15 @@ export default function SchemaView({
           columnTypes: input.columnTypes,
         };
       }
+      // Export (also hasOutput: false) writes real files instead of
+      // producing a table -- its "output" is always an empty {columns:[],
+      // rows:[]} placeholder (routers/nodes.py's shared /nodes/run shape
+      // needs SOME result even for a sink), which would otherwise render
+      // as an AG-Grid reading "No rows to show" on a run that actually
+      // succeeded. Returning null here instead routes it through
+      // selectedProcessorNodeHint below, which shows the run's own info
+      // message ("Exported 2 table(s) to ...") in its place.
+      if (proc?.catalogName === "Export") return null;
       const output = nodeOutputs[selectedProcessorNode.id];
       if (!output) return null;
       return {
@@ -2804,6 +2963,13 @@ export default function SchemaView({
     const status = nodeRunStatus[selectedProcessorNode.id];
     if (status?.state === "running") return "Running…";
     if (status?.state === "error") return status.error ?? "That run failed.";
+    // Export never has a table to show (see the `selectedTable` branch
+    // above) -- once it's actually run, its own info message already says
+    // exactly what happened ("Exported 2 table(s) to ..."), which is more
+    // useful here than the generic not-run-yet copy below.
+    if (proc?.catalogName === "Export" && status?.state === "done") {
+      return status.info?.join(" ") || "Exported.";
+    }
     // Idle here almost always means "not enough converted inputs yet" --
     // a node with 2+ already runs itself (see the auto-run effect above),
     // so telling the user to manually right-click -> Run would be

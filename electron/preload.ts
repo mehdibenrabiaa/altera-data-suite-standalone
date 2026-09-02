@@ -327,6 +327,105 @@ contextBridge.exposeInMainWorld("alteraStudio", {
     ipcRenderer.send("cascadeFill:close");
   },
 
+  // Main window: open (or focus/reseed) the separate Export configure
+  // window for one node -- same real-window, round-trips-on-Apply pattern
+  // as Filter Builder/Header Promoter/Merge/Shift Columns/Cleaner/Unique/
+  // Column Edit/Change Type/Regex/Cascade Fill above.
+  openExportWindow: (payload: unknown): void => {
+    ipcRenderer.invoke("export:open", payload);
+  },
+  onExportApplied: (cb: (payload: unknown) => void): (() => void) => {
+    const listener = (_event: unknown, payload: unknown) => cb(payload);
+    ipcRenderer.on("export:applied", listener);
+    return () => ipcRenderer.removeListener("export:applied", listener);
+  },
+  requestExportInit: (nodeId: string): Promise<unknown> => ipcRenderer.invoke("export:request-init", nodeId),
+  onExportInit: (cb: (payload: unknown) => void): (() => void) => {
+    const listener = (_event: unknown, payload: unknown) => cb(payload);
+    ipcRenderer.on("export:init", listener);
+    return () => ipcRenderer.removeListener("export:init", listener);
+  },
+  applyExport: (payload: unknown): void => {
+    ipcRenderer.send("export:apply", payload);
+  },
+  closeExportWindow: (): void => {
+    ipcRenderer.send("export:close");
+  },
+  chooseExportFile: (): Promise<string | null> => ipcRenderer.invoke("export:chooseFile"),
+  chooseExportFolder: (): Promise<string | null> => ipcRenderer.invoke("export:chooseFolder"),
+
+  // Main window: open (or focus/reseed) the separate Unpivot Columns
+  // configure window for one node -- same real-window, round-trips-on-
+  // Apply pattern as every other Configure window above.
+  openUnpivotColumnsWindow: (payload: unknown): void => {
+    ipcRenderer.invoke("unpivotColumns:open", payload);
+  },
+  onUnpivotColumnsApplied: (cb: (payload: unknown) => void): (() => void) => {
+    const listener = (_event: unknown, payload: unknown) => cb(payload);
+    ipcRenderer.on("unpivotColumns:applied", listener);
+    return () => ipcRenderer.removeListener("unpivotColumns:applied", listener);
+  },
+  requestUnpivotColumnsInit: (nodeId: string): Promise<unknown> => ipcRenderer.invoke("unpivotColumns:request-init", nodeId),
+  onUnpivotColumnsInit: (cb: (payload: unknown) => void): (() => void) => {
+    const listener = (_event: unknown, payload: unknown) => cb(payload);
+    ipcRenderer.on("unpivotColumns:init", listener);
+    return () => ipcRenderer.removeListener("unpivotColumns:init", listener);
+  },
+  applyUnpivotColumns: (payload: unknown): void => {
+    ipcRenderer.send("unpivotColumns:apply", payload);
+  },
+  closeUnpivotColumnsWindow: (): void => {
+    ipcRenderer.send("unpivotColumns:close");
+  },
+
+  // Main window: open (or focus/reseed) the separate Pivot Columns
+  // configure window for one node -- same real-window, round-trips-on-
+  // Apply pattern as every other Configure window above.
+  openPivotColumnsWindow: (payload: unknown): void => {
+    ipcRenderer.invoke("pivotColumns:open", payload);
+  },
+  onPivotColumnsApplied: (cb: (payload: unknown) => void): (() => void) => {
+    const listener = (_event: unknown, payload: unknown) => cb(payload);
+    ipcRenderer.on("pivotColumns:applied", listener);
+    return () => ipcRenderer.removeListener("pivotColumns:applied", listener);
+  },
+  requestPivotColumnsInit: (nodeId: string): Promise<unknown> => ipcRenderer.invoke("pivotColumns:request-init", nodeId),
+  onPivotColumnsInit: (cb: (payload: unknown) => void): (() => void) => {
+    const listener = (_event: unknown, payload: unknown) => cb(payload);
+    ipcRenderer.on("pivotColumns:init", listener);
+    return () => ipcRenderer.removeListener("pivotColumns:init", listener);
+  },
+  applyPivotColumns: (payload: unknown): void => {
+    ipcRenderer.send("pivotColumns:apply", payload);
+  },
+  closePivotColumnsWindow: (): void => {
+    ipcRenderer.send("pivotColumns:close");
+  },
+
+  // Main window: open (or focus/reseed) the separate Add Column configure
+  // window for one node -- same real-window, round-trips-on-Apply pattern
+  // as every other Configure window above.
+  openAddColumnWindow: (payload: unknown): void => {
+    ipcRenderer.invoke("addColumn:open", payload);
+  },
+  onAddColumnApplied: (cb: (payload: unknown) => void): (() => void) => {
+    const listener = (_event: unknown, payload: unknown) => cb(payload);
+    ipcRenderer.on("addColumn:applied", listener);
+    return () => ipcRenderer.removeListener("addColumn:applied", listener);
+  },
+  requestAddColumnInit: (nodeId: string): Promise<unknown> => ipcRenderer.invoke("addColumn:request-init", nodeId),
+  onAddColumnInit: (cb: (payload: unknown) => void): (() => void) => {
+    const listener = (_event: unknown, payload: unknown) => cb(payload);
+    ipcRenderer.on("addColumn:init", listener);
+    return () => ipcRenderer.removeListener("addColumn:init", listener);
+  },
+  applyAddColumn: (payload: unknown): void => {
+    ipcRenderer.send("addColumn:apply", payload);
+  },
+  closeAddColumnWindow: (): void => {
+    ipcRenderer.send("addColumn:close");
+  },
+
   // Main window: closes whichever kept-alive window (Configure or Browse)
   // is currently showing this node, if any -- called once per deleted
   // processor node so an open per-node window doesn't outlive the node

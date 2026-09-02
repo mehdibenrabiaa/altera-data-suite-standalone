@@ -12,6 +12,13 @@ router = APIRouter(prefix="/nodes", tags=["nodes"])
 class TableInput(BaseModel):
     columns: list[str]
     rows: list[list[Any]]
+    # The source table/node's own display name, echoed straight from the
+    # frontend's resolveNodeInputs -- only export_data reads this (each
+    # output sheet/file is named after its source), carried as a DataFrame
+    # attr (same mechanism already used for column_types below) rather than
+    # a transform-signature change, since every other transform just
+    # ignores it.
+    name: str | None = None
 
 
 class RunNodeRequest(BaseModel):
@@ -27,7 +34,11 @@ def run_node(req: RunNodeRequest):
     except KeyError:
         raise HTTPException(400, f"Unknown node kind: {req.kind}")
     try:
-        dfs = [pd.DataFrame(inp.rows, columns=inp.columns) for inp in req.inputs]
+        dfs = []
+        for inp in req.inputs:
+            df = pd.DataFrame(inp.rows, columns=inp.columns)
+            df.attrs["name"] = inp.name
+            dfs.append(df)
         result, warnings, info = transform(dfs, req.params)
         # Captured before fillna/astype (which return a NEW DataFrame) --
         # only change_type sets this (see its own comment); every other

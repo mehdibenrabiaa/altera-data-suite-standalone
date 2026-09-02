@@ -95,7 +95,7 @@ export interface DraggedNodeEntry {
 }
 
 export const NODE_CATALOG: NodeCatalogEntry[] = [
-  { name: "Excel Exporter", description: "Export one or more datasets to Excel (.xlsx) or CSV.", icon: "./node-icons/excel_exporter.svg", category: "io", hasOutput: false },
+  { name: "Export", description: "Export one or more datasets to Excel (.xlsx) or CSV.", icon: "./node-icons/excel_exporter.svg", category: "io", hasOutput: false },
   { name: "Browse", description: "Preview a table's rows and columns without modifying the data.", icon: "./node-icons/browse.svg", category: "io", hasOutput: false, mainInputMax: 1 },
   // Preparation -- Alteryx's own Select tool covers exactly what Column
   // Edit and Change Type do (reorder/rename/delete columns; change a
@@ -113,11 +113,18 @@ export const NODE_CATALOG: NodeCatalogEntry[] = [
   { name: "Unique", description: "Remove duplicate rows based on selected columns.", icon: "./node-icons/deduplicator.svg", category: "preparation", mainInputMax: 1 },
   { name: "Cascade Fill", description: "Fill up or fill down to propagate values vertically within columns.", icon: "./node-icons/cascade_fill.svg", category: "preparation", mainInputMax: 1 },
   { name: "Cleaner", description: "Clean and transform text columns with various operations.", icon: "./node-icons/cleaner.svg", category: "preparation", mainInputMax: 1 },
+  { name: "Unpivot Columns", description: "Turn selected columns into Attribute/Value row pairs, like Power Query's Unpivot Columns.", icon: "./node-icons/unpivot.svg", category: "preparation", mainInputMax: 1 },
+  { name: "Pivot Columns", description: "Turn a labels column into new column headers and a values column into their contents, like Power Query's Pivot Column.", icon: "./node-icons/pivot.svg", category: "preparation", mainInputMax: 1 },
+  { name: "Add Column", description: "Add a new column computed from a formula, like Power Query's Add Custom Column.", icon: "./node-icons/add_column.svg", category: "preparation", mainInputMax: 1 },
   // Join -- Alteryx's own Join tool is exactly Merge's "match on shared
   // columns" mode, and its Append Fields tool is exactly Horizontal
   // Stack's "combine by position" mode.
   { name: "Horizontal Stack", description: "Combine two tables side by side, matching rows by position or a key column.", icon: "./node-icons/horizontal_stack.svg", category: "join" },
   { name: "Merge", description: "Combine two tables by matching rows on shared columns or row position.", icon: "./node-icons/merge.svg", category: "join", hasExtraInput: true, mainInputMax: 1 },
+  // Orange's own Concatenate widget -- stacks any number of tables' ROWS
+  // into one, matching columns by name (the opposite axis from Horizontal
+  // Stack's column-wise-by-position combine above).
+  { name: "Concatenate", description: "Stack two or more tables' rows into one, matching columns by name.", icon: "./node-icons/concatenate.svg", category: "join" },
   // Parse -- Alteryx's own RegEx tool.
   { name: "Regular Expressions", description: "Extract regex matches from a column, with a live match preview.", icon: "./node-icons/regex.svg", category: "parse", mainInputMax: 1 },
 ];

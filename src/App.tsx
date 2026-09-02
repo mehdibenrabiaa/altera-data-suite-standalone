@@ -2553,6 +2553,26 @@ const KonvaA4Editor = () => {
       handleUpdateProcessorNodeParams(nodeId, params as unknown as Record<string, unknown>);
     });
   }, [handleUpdateProcessorNodeParams]);
+  useEffect(() => {
+    return window.alteraStudio.onExportApplied(({ nodeId, params }) => {
+      handleUpdateProcessorNodeParams(nodeId, params as unknown as Record<string, unknown>);
+    });
+  }, [handleUpdateProcessorNodeParams]);
+  useEffect(() => {
+    return window.alteraStudio.onUnpivotColumnsApplied(({ nodeId, params }) => {
+      handleUpdateProcessorNodeParams(nodeId, params as unknown as Record<string, unknown>);
+    });
+  }, [handleUpdateProcessorNodeParams]);
+  useEffect(() => {
+    return window.alteraStudio.onPivotColumnsApplied(({ nodeId, params }) => {
+      handleUpdateProcessorNodeParams(nodeId, params as unknown as Record<string, unknown>);
+    });
+  }, [handleUpdateProcessorNodeParams]);
+  useEffect(() => {
+    return window.alteraStudio.onAddColumnApplied(({ nodeId, params }) => {
+      handleUpdateProcessorNodeParams(nodeId, params as unknown as Record<string, unknown>);
+    });
+  }, [handleUpdateProcessorNodeParams]);
 
   // Workflow-canvas edges -- see the `edges` state comment above for why
   // these live here now instead of as local SchemaView state.

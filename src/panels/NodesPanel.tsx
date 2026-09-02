@@ -47,10 +47,6 @@ export default function NodesPanel({ onAddNode }: NodesPanelProps) {
                               the tile body. */}
                           <img src={n.icon} alt="" draggable={false} />
                         </div>
-                        <span className="node-port-triangle node-port-triangle-in" />
-                        {n.hasOutput !== false && (
-                          <span className="node-port-triangle node-port-triangle-out" />
-                        )}
                       </div>
                       <span className="node-tile-name nodes-panel-tile-name">{n.name}</span>
                     </div>

@@ -1065,7 +1065,8 @@ button:focus-visible {
 .unique-window .match-toggle,
 .change-type-window .match-toggle,
 .regex-window .match-toggle,
-.cascade-fill-window .match-toggle {
+.cascade-fill-window .match-toggle,
+.export-window .match-toggle {
   display: inline-flex;
   border: 1px solid #e0e0e0;
   overflow: hidden;
@@ -1076,7 +1077,8 @@ button:focus-visible {
 .unique-window .match-toggle-btn,
 .change-type-window .match-toggle-btn,
 .regex-window .match-toggle-btn,
-.cascade-fill-window .match-toggle-btn {
+.cascade-fill-window .match-toggle-btn,
+.export-window .match-toggle-btn {
   height: 22px;
   padding: 0 10px;
   font-size: 11px;
@@ -1094,14 +1096,16 @@ button:focus-visible {
 .unique-window .match-toggle-btn.active,
 .change-type-window .match-toggle-btn.active,
 .regex-window .match-toggle-btn.active,
-.cascade-fill-window .match-toggle-btn.active { background: #FE4D41; color: #fff; }
+.cascade-fill-window .match-toggle-btn.active,
+.export-window .match-toggle-btn.active { background: #FE4D41; color: #fff; }
 .filter-builder-window .match-toggle-btn:not(.active):hover,
 .merge-window .match-toggle-btn:not(.active):hover,
 .shift-columns-window .match-toggle-btn:not(.active):hover,
 .unique-window .match-toggle-btn:not(.active):hover,
 .change-type-window .match-toggle-btn:not(.active):hover,
 .regex-window .match-toggle-btn:not(.active):hover,
-.cascade-fill-window .match-toggle-btn:not(.active):hover { background: #f0f0f0; color: #1a1a1a; }
+.cascade-fill-window .match-toggle-btn:not(.active):hover,
+.export-window .match-toggle-btn:not(.active):hover { background: #f0f0f0; color: #1a1a1a; }
 
 /* Filter rows */
 .filter-builder-window .filter-rows { display: flex; flex-direction: column; gap: 6px; }
@@ -1143,7 +1147,8 @@ button:focus-visible {
 /* Add condition link-button -- shared with Merge's own "Add column pair"
    below. */
 .filter-builder-window .btn-add-condition,
-.merge-window .btn-add-condition {
+.merge-window .btn-add-condition,
+.export-window .btn-add-condition {
   all: unset;
   display: inline-flex;
   align-items: center;
@@ -1154,7 +1159,8 @@ button:focus-visible {
   padding: 2px 0;
 }
 .filter-builder-window .btn-add-condition:hover,
-.merge-window .btn-add-condition:hover { text-decoration: underline; }
+.merge-window .btn-add-condition:hover,
+.export-window .btn-add-condition:hover { text-decoration: underline; }
 
 /* Final logic bar */
 .filter-builder-window .final-logic { font-size: 12px; color: #999; padding: 2px 0; }
@@ -1176,7 +1182,11 @@ button:focus-visible {
 .column-edit-window .filter-empty-state,
 .change-type-window .filter-empty-state,
 .regex-window .filter-empty-state,
-.cascade-fill-window .filter-empty-state {
+.cascade-fill-window .filter-empty-state,
+.export-window .filter-empty-state,
+.unpivot-columns-window .filter-empty-state,
+.pivot-columns-window .filter-empty-state,
+.add-column-window .filter-empty-state {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -1199,7 +1209,11 @@ button:focus-visible {
 .column-edit-window .filter-empty-state h3,
 .change-type-window .filter-empty-state h3,
 .regex-window .filter-empty-state h3,
-.cascade-fill-window .filter-empty-state h3 { margin: 0; font-size: 14px; font-weight: 600; color: #1a1a1a; }
+.cascade-fill-window .filter-empty-state h3,
+.export-window .filter-empty-state h3,
+.unpivot-columns-window .filter-empty-state h3,
+.pivot-columns-window .filter-empty-state h3,
+.add-column-window .filter-empty-state h3 { margin: 0; font-size: 14px; font-weight: 600; color: #1a1a1a; }
 .filter-builder-window .filter-empty-state p,
 .header-promoter-window .filter-empty-state p,
 .browse-window .filter-empty-state p,
@@ -1210,7 +1224,11 @@ button:focus-visible {
 .column-edit-window .filter-empty-state p,
 .change-type-window .filter-empty-state p,
 .regex-window .filter-empty-state p,
-.cascade-fill-window .filter-empty-state p { margin: 0; font-size: 13px; color: #555; }
+.cascade-fill-window .filter-empty-state p,
+.export-window .filter-empty-state p,
+.unpivot-columns-window .filter-empty-state p,
+.pivot-columns-window .filter-empty-state p,
+.add-column-window .filter-empty-state p { margin: 0; font-size: 13px; color: #555; }
 
 /* Apply/Cancel footer -- this app's own addition, not part of the ported
    original (see the top-of-file comment on why). Reused as-is by Header
@@ -1789,6 +1807,262 @@ button:focus-visible {
   font-family: "Google Sans Flex", sans-serif;
   font-size: 13px;
   color: #1a1a1a;
+}
+
+/* Export window -- same outer shell as Cascade Fill's above, plus its own
+   chosen-path row and a read-only list of currently connected table names
+   (reusing .unique-list's own scrollable-box look). */
+.export-window {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  box-sizing: border-box;
+  background: #f5f5f5;
+  font-family: "Google Sans Flex", sans-serif;
+  font-size: 13px;
+  color: #1a1a1a;
+}
+.export-path-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.export-path-value {
+  flex: 1;
+  min-width: 0;
+  background: #ffffff;
+  border: 1px solid #e0e0e0;
+  padding: 5px 8px;
+  font-size: 12px;
+  color: #555;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.export-table-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: #ffffff;
+  border: 1px solid #e0e0e0;
+  padding: 8px 10px;
+  max-height: 160px;
+  overflow-y: auto;
+}
+.export-table-list-item {
+  font-size: 13px;
+  padding: 3px 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Unpivot Columns window -- reuses .unique-*'s section/checklist/stats
+   shell verbatim, same as Cascade Fill above. */
+.unpivot-columns-window {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  box-sizing: border-box;
+  background: #f5f5f5;
+  font-family: "Google Sans Flex", sans-serif;
+  font-size: 13px;
+  color: #1a1a1a;
+}
+
+/* Pivot Columns window -- same outer shell as the others above; two plain
+   Select pickers is all it needs, no dedicated styling of its own. */
+.pivot-columns-window {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  box-sizing: border-box;
+  background: #f5f5f5;
+  font-family: "Google Sans Flex", sans-serif;
+  font-size: 13px;
+  color: #1a1a1a;
+}
+
+/* Add Column window -- same outer shell as the others above, plus its own
+   wrapping row of small clickable "insert this column" pill buttons. */
+.add-column-window {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  box-sizing: border-box;
+  background: #f5f5f5;
+  font-family: "Google Sans Flex", sans-serif;
+  font-size: 13px;
+  color: #1a1a1a;
+}
+.add-column-ref-list {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 110px;
+}
+.add-column-ref-item {
+  border: 1px solid #e0e0e0;
+  background: #ffffff;
+  color: #1a1a1a;
+  font-family: inherit;
+  font-size: 12px;
+  padding: 3px 9px;
+  cursor: pointer;
+  border-radius: 999px;
+}
+.add-column-ref-item:hover { background: #f0f0f0; border-color: #ccc; }
+.add-column-ref-empty {
+  font-size: 12px;
+  color: #999;
+  padding: 3px 0;
+}
+
+/* Formula box -- a real code-editor LOOK (VS Code's own Consolas/Light+
+   colors) without a real code-editor LIBRARY behind it: this environment's
+   npm registry access is locked down (confirmed directly -- even a
+   trivial, unrelated package 403s), so CodeMirror/Monaco were never
+   actually installable. This is the classic hand-rolled substitute: a
+   transparent, real <textarea> (still owns the actual cursor/selection/
+   typing) layered exactly on top of a same-content, same-font styled
+   overlay rendering formulaHighlight.ts's tokens in color -- see
+   AddColumnWindow.tsx's own comment for the full reasoning. `resize` and
+   `overflow: hidden` live on THIS wrapper (not the textarea) so both
+   inset:0 layers grow/shrink together when the user drags the handle.
+   `overflow-y: auto` still works normally since it isn't overridden here
+   (only overflow-X's clipping matters at this level; long lines wrap
+   anyway, see `white-space: pre-wrap` below). */
+.formula-editor {
+  position: relative;
+  height: 96px;
+  resize: vertical;
+  overflow: hidden;
+  border: 1px solid #e0e0e0;
+  background: #ffffff;
+}
+.formula-editor-highlight,
+.formula-editor-textarea {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 6px 8px;
+  border: none;
+  background: transparent;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow: auto;
+}
+.formula-editor-highlight {
+  color: #1a1a1a;
+  pointer-events: none;
+}
+.formula-editor-textarea {
+  color: transparent;
+  caret-color: #1a1a1a;
+  resize: none;
+}
+/* color here matters, not just background -- the real text underneath is
+   `color: transparent` (see .formula-editor-textarea above), and ::selection
+   doesn't inherit through that on its own, so a selected range without this
+   painted a solid highlight block right over the colored overlay text,
+   hiding it entirely instead of just re-coloring it. Selected text reads
+   as plain dark text (not per-token colors) while selected -- an accepted
+   tradeoff of the overlay technique itself, not something fixable without
+   a real custom-rendered editor. */
+.formula-editor-textarea::selection { background: #add6ff; color: #1a1a1a; }
+.formula-editor-textarea::placeholder { color: #999; -webkit-text-fill-color: #999; }
+/* Token colors -- VS Code's own Light+ theme palette, so a formula reads
+   exactly like real code: [Column] refs as variables (blue), "strings" in
+   brown-red, 123 numbers in green, UPPER(...)-style functions in gold. */
+.formula-token-bracket { color: #001080; }
+.formula-token-string { color: #a31515; }
+.formula-token-number { color: #098658; }
+.formula-token-function { color: #795e26; font-weight: 600; }
+.formula-token-operator { color: #000000; }
+.formula-token-paren { color: #555555; }
+.formula-token-text { color: #1a1a1a; }
+/* Zero-width, but a real inline element -- its own getBoundingClientRect()
+   after render is how AddColumnWindow.tsx finds the textarea's actual
+   on-screen caret position (see formulaHighlight.ts's splitTokensAtCursor),
+   there's no more direct way to ask a plain <textarea> where its caret is
+   currently rendered. */
+.formula-caret-marker {
+  display: inline-block;
+  width: 0;
+}
+/* Floating autocomplete popup -- `position: fixed` deliberately (not
+   absolute): .formula-editor's own `overflow: hidden` (needed so the
+   highlight/textarea layers stay clipped to its resizable box, see that
+   rule's own comment) would otherwise clip this the moment it extends
+   past the box, which a suggestion list sitting right under the last
+   line of a nearly-full box does constantly. Fixed positioning escapes
+   that clipping and just needs viewport coordinates, which is exactly
+   what the caret marker's own getBoundingClientRect() already returns. */
+.formula-autocomplete-popup {
+  position: fixed;
+  z-index: 10000;
+  background: #ffffff;
+  border: 1px solid #c0c0c0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+  max-height: 160px;
+  overflow-y: auto;
+  min-width: 150px;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 12.5px;
+}
+.formula-autocomplete-item {
+  padding: 4px 10px;
+  cursor: pointer;
+  color: #1a1a1a;
+  white-space: nowrap;
+}
+.formula-autocomplete-item.active {
+  background: #FE4D41;
+  color: #ffffff;
+}
+/* Live syntax error -- validateFormula's own best-effort re-walk of the
+   backend's grammar (see its comment for why this doesn't just re-run the
+   real evaluator). Red border on the box itself plus the message where
+   the plain hint text normally sits, so getting it wrong is at least as
+   visible as getting it right. */
+.formula-editor-error { border-color: #d4380d; }
+.formula-error-hint {
+  margin: 0;
+  font-size: 12px;
+  color: #d4380d;
+  line-height: 1.5;
+}
+/* Excel-style argument tooltip -- shown above the caret (see
+   AddColumnWindow.tsx's hintPos, `bottom`-anchored so it grows upward
+   away from the line being typed, same as Excel's own formula-bar
+   tooltip) the whole time the cursor sits inside a known function's
+   parens. `position: fixed` for the identical overflow-escaping reason
+   as .formula-autocomplete-popup above. */
+.formula-hint-popup {
+  position: fixed;
+  z-index: 10000;
+  background: #1e1e1e;
+  color: #d4d4d4;
+  border: 1px solid #454545;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  padding: 5px 8px;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+.formula-hint-name { color: #dcdcaa; font-weight: 600; }
+.formula-hint-arg { color: #9cdcfe; }
+.formula-hint-arg-active { color: #9cdcfe; text-decoration: underline; font-weight: 600; }
+.formula-hint-description {
+  margin-top: 3px;
+  color: #a0a0a0;
+  font-family: "Google Sans Flex", sans-serif;
+  font-size: 11px;
+  white-space: normal;
+  max-width: 260px;
 }
 
 /* Column Edit window -- same outer shell/section rhythm as the other
@@ -3110,7 +3384,7 @@ body.dock-dragging .dock-style-canvas-dock-panel {
 .nodes-panel-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(58px, 1fr));
-  gap: 16px 24px;
+  gap: 20px;
   align-content: start;
   padding-left: 20px;
 }
