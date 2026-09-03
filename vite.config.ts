@@ -44,6 +44,7 @@ export default defineConfig({
         unpivotColumns: resolve(__dirname, "unpivot-columns.html"),
         pivotColumns: resolve(__dirname, "pivot-columns.html"),
         addColumn: resolve(__dirname, "add-column.html"),
+        conditionalColumn: resolve(__dirname, "conditional-column.html"),
       },
     },
   },

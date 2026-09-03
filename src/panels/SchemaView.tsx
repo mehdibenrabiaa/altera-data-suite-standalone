@@ -30,7 +30,7 @@ import { Spin } from "antd";
 import { LoadingOutlined } from "@ant-design/icons";
 import { AgGridReact } from "ag-grid-react";
 import { ModuleRegistry, AllCommunityModule, themeQuartz, type ColDef } from "ag-grid-community";
-import type { Rectangle, Group, SchemaPreviewTable, ProcessorNodeInstance, FilterBuilderParams, FilterColumnDefinition, HeaderPromoterParams, MergeParams, ShiftColumnsParams, CleanerParams, UniqueParams, ColumnEditParams, ChangeTypeParams, RegexParams, CascadeFillParams, ExportParams, UnpivotColumnsParams, PivotColumnsParams, AddColumnParams, NodeLogEntry } from "../types";
+import type { Rectangle, Group, SchemaPreviewTable, ProcessorNodeInstance, FilterBuilderParams, FilterColumnDefinition, HeaderPromoterParams, MergeParams, ShiftColumnsParams, CleanerParams, UniqueParams, ColumnEditParams, ChangeTypeParams, RegexParams, CascadeFillParams, ExportParams, UnpivotColumnsParams, PivotColumnsParams, AddColumnParams, ConditionalColumnParams, NodeLogEntry } from "../types";
 import { computeDefaultMatchPair } from "../mergeDefaults";
 import {
   NODE_DRAG_MIME,
@@ -49,10 +49,10 @@ import { TypedColumnHeader } from "../columnTypeIcons";
 // (backend/app/nodes.py's NODE_TRANSFORMS registry) -- gates the "Run"
 // context-menu item so it only appears on nodes that can really execute.
 // Extend both maps together as more real nodes come online.
-const RUNNABLE_NODE_KINDS = new Set(["Horizontal Stack", "Filter Builder", "Header Promoter", "Index Column", "Merge", "Shift Columns", "Cleaner", "Unique", "Column Edit", "Change Type", "Regular Expressions", "Cascade Fill", "Export", "Unpivot Columns", "Pivot Columns", "Add Column", "Concatenate"]);
+const RUNNABLE_NODE_KINDS = new Set(["Horizontal Stack", "Filter", "Header Promoter", "Index Column", "Merge", "Shift Columns", "Cleaner", "Unique", "Column Edit", "Change Type", "Regular Expressions", "Cascade Fill", "Export", "Unpivot Columns", "Pivot Columns", "Formula", "Add Column", "Concatenate"]);
 const NODE_KIND_SLUGS: Record<string, string> = {
   "Horizontal Stack": "horizontal_stack",
-  "Filter Builder": "filter_builder",
+  "Filter": "filter_builder",
   "Header Promoter": "header_promoter",
   "Index Column": "index_column",
   "Merge": "merge_data",
@@ -66,7 +66,8 @@ const NODE_KIND_SLUGS: Record<string, string> = {
   "Export": "export_data",
   "Unpivot Columns": "unpivot_columns",
   "Pivot Columns": "pivot_columns",
-  "Add Column": "add_column",
+  "Formula": "add_column",
+  "Add Column": "conditional_column",
   "Concatenate": "concatenate",
 };
 // Minimum resolved (primary) inputs a kind needs before it's worth
@@ -80,7 +81,7 @@ const NODE_KIND_SLUGS: Record<string, string> = {
 // the backend (merge_data raises if fewer than 2 tables arrive). Shift
 // Columns, Cleaner, Unique, Column Edit, Change Type, and Regular
 // Expressions likewise only ever transform a single table.
-const NODE_MIN_INPUTS: Record<string, number> = { "Horizontal Stack": 2, "Filter Builder": 1, "Header Promoter": 1, "Index Column": 1, "Merge": 1, "Shift Columns": 1, "Cleaner": 1, "Unique": 1, "Column Edit": 1, "Change Type": 1, "Regular Expressions": 1, "Concatenate": 2 };
+const NODE_MIN_INPUTS: Record<string, number> = { "Horizontal Stack": 2, "Filter": 1, "Header Promoter": 1, "Index Column": 1, "Merge": 1, "Shift Columns": 1, "Cleaner": 1, "Unique": 1, "Column Edit": 1, "Change Type": 1, "Regular Expressions": 1, "Concatenate": 2 };
 
 // Catalog widget names with their own dedicated window -- every node here
 // gets a real separate BrowserWindow (see FilterBuilderWindow.tsx/
@@ -93,7 +94,7 @@ const NODE_MIN_INPUTS: Record<string, number> = { "Horizontal Stack": 2, "Filter
 // views data), so it's threaded through this same map rather than a
 // separate lookup.
 const NODE_WINDOW_LABEL: Record<string, string> = {
-  "Filter Builder": "Configure…",
+  "Filter": "Configure…",
   "Browse": "Browse Data…",
   "Header Promoter": "Configure…",
   "Merge": "Configure…",
@@ -107,6 +108,7 @@ const NODE_WINDOW_LABEL: Record<string, string> = {
   "Export": "Configure…",
   "Unpivot Columns": "Configure…",
   "Pivot Columns": "Configure…",
+  "Formula": "Configure…",
   "Add Column": "Configure…",
 };
 const NODE_KINDS_WITH_WINDOW = new Set(Object.keys(NODE_WINDOW_LABEL));
@@ -1086,7 +1088,10 @@ export default function SchemaView({
   onSelectedNodeLogChange,
   visible,
 }: SchemaViewProps) {
-  const { onCellKeyDown: onOutputCellKeyDown, onCellContextMenu: onOutputCellContextMenu, suppressContextMenu: suppressOutputContextMenu, contextMenu: outputCellContextMenu } = useGridCellCopy();
+  const {
+    onCellKeyDown: onOutputCellKeyDown, onCellContextMenu: onOutputCellContextMenu, suppressContextMenu: suppressOutputContextMenu, contextMenu: outputCellContextMenu,
+    onGridReady: onOutputGridReady, onCellMouseDown: onOutputCellMouseDown, onCellMouseOver: onOutputCellMouseOver, rangeCellClass: outputRangeCellClass,
+  } = useGridCellCopy();
   // Single source of truth for card content: real preview data once it has
   // landed, otherwise dummy columns + placeholder rows derived from the
   // actual rectangles (or a fully fake example set when none exist yet).
@@ -2295,6 +2300,27 @@ export default function SchemaView({
   }, [processorNodes, resolveNodeInputs, closeNodeCtxMenu]);
 
   // Opens (or focuses/reseeds) the node's Configure window -- same real-
+  // window, snapshot-on-open pattern as Filter Builder above, and reuses
+  // its exact column-type inference (inferColumnDefinition) so this
+  // node's condition rows get the same numeric/categorical/text-aware
+  // editors Filter Builder's own do.
+  const handleOpenConditionalColumn = useCallback((id: string) => {
+    const proc = processorNodes.find((p) => p.id === id);
+    if (!proc) return;
+    const primary = resolveNodeInputs(id)[0];
+    const inputColumns: FilterColumnDefinition[] = primary
+      ? primary.columns.map((name, i) => inferColumnDefinition(name, primary.rows.map((r) => r[i] ?? "")))
+      : [];
+    window.alteraStudio.openConditionalColumnWindow({
+      nodeId: id,
+      nodeName: proc.name || proc.catalogName,
+      initialParams: (proc.params as ConditionalColumnParams | undefined) ?? { columnName: "", clauses: [], elseValue: "" },
+      inputColumns,
+    });
+    closeNodeCtxMenu();
+  }, [processorNodes, resolveNodeInputs, closeNodeCtxMenu]);
+
+  // Opens (or focuses/reseeds) the node's Configure window -- same real-
   // window, snapshot-on-open pattern as the others above. Needs the
   // primary input's ROWS too (not just column names) so the live
   // match-preview grid has real data to highlight.
@@ -2402,9 +2428,10 @@ export default function SchemaView({
     else if (proc?.catalogName === "Export") handleOpenExport(id);
     else if (proc?.catalogName === "Unpivot Columns") handleOpenUnpivotColumns(id);
     else if (proc?.catalogName === "Pivot Columns") handleOpenPivotColumns(id);
-    else if (proc?.catalogName === "Add Column") handleOpenAddColumn(id);
+    else if (proc?.catalogName === "Formula") handleOpenAddColumn(id);
+    else if (proc?.catalogName === "Add Column") handleOpenConditionalColumn(id);
     else handleOpenFilterBuilder(id);
-  }, [processorNodes, handleOpenBrowse, handleOpenHeaderPromoter, handleOpenMerge, handleOpenShiftColumns, handleOpenCleaner, handleOpenUnique, handleOpenColumnEdit, handleOpenChangeType, handleOpenRegex, handleOpenCascadeFill, handleOpenExport, handleOpenUnpivotColumns, handleOpenPivotColumns, handleOpenAddColumn, handleOpenFilterBuilder, onNodesChange]);
+  }, [processorNodes, handleOpenBrowse, handleOpenHeaderPromoter, handleOpenMerge, handleOpenShiftColumns, handleOpenCleaner, handleOpenUnique, handleOpenColumnEdit, handleOpenChangeType, handleOpenRegex, handleOpenCascadeFill, handleOpenExport, handleOpenUnpivotColumns, handleOpenPivotColumns, handleOpenAddColumn, handleOpenConditionalColumn, handleOpenFilterBuilder, onNodesChange]);
 
   // `select`: only true for a user-initiated single-node run (the context
   // menu's "Run"), which is the one case selecting the node to show its
@@ -3484,13 +3511,16 @@ export default function SchemaView({
                 theme={outputGridTheme}
                 rowData={outputRowData ?? []}
                 columnDefs={outputColumnDefs ?? []}
-                defaultColDef={outputGridDefaultColDef}
+                defaultColDef={{ ...outputGridDefaultColDef, cellClass: outputRangeCellClass }}
                 // `field` is the real extracted column name, which can
                 // contain a literal "." (e.g. a PDF header like "2023.01")
                 // -- AG-Grid treats dots in `field` as nested-path
                 // separators by default, which would render such a column
                 // empty.
                 suppressFieldDotNotation
+                onGridReady={onOutputGridReady}
+                onCellMouseDown={onOutputCellMouseDown}
+                onCellMouseOver={onOutputCellMouseOver}
                 onCellKeyDown={onOutputCellKeyDown}
                 onCellContextMenu={onOutputCellContextMenu}
                 suppressContextMenu={suppressOutputContextMenu}

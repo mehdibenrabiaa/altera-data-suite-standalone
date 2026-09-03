@@ -100,7 +100,7 @@ function EmptyState() {
 // back to the main window, just live-once-opened data.
 export default function BrowseWindow() {
   const [payload, setPayload] = useState<BrowseWindowPayload | null>(null);
-  const { onCellKeyDown, onCellContextMenu, suppressContextMenu, contextMenu } = useGridCellCopy();
+  const { onCellKeyDown, onCellContextMenu, suppressContextMenu, contextMenu, onGridReady, onCellMouseDown, onCellMouseOver, rangeCellClass } = useGridCellCopy();
 
   useEffect(() => {
     if (!window.alteraStudio) return;
@@ -180,12 +180,15 @@ export default function BrowseWindow() {
             theme={browseGridTheme}
             rowData={rowData}
             columnDefs={columnDefs}
-            defaultColDef={browseGridDefaultColDef}
+            defaultColDef={{ ...browseGridDefaultColDef, cellClass: rangeCellClass }}
             // `field` is the real extracted column name, which can contain
             // a literal "." (e.g. a PDF header like "2023.01") -- AG-Grid
             // treats dots in `field` as nested-path separators by default,
             // which would render such a column empty.
             suppressFieldDotNotation
+            onGridReady={onGridReady}
+            onCellMouseDown={onCellMouseDown}
+            onCellMouseOver={onCellMouseOver}
             onCellKeyDown={onCellKeyDown}
             onCellContextMenu={onCellContextMenu}
             suppressContextMenu={suppressContextMenu}

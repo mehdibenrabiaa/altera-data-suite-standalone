@@ -426,6 +426,30 @@ contextBridge.exposeInMainWorld("alteraStudio", {
     ipcRenderer.send("addColumn:close");
   },
 
+  // Main window: open (or focus/reseed) the separate conditional Add
+  // Column configure window for one node -- same real-window,
+  // round-trips-on-Apply pattern as every other Configure window above.
+  openConditionalColumnWindow: (payload: unknown): void => {
+    ipcRenderer.invoke("conditionalColumn:open", payload);
+  },
+  onConditionalColumnApplied: (cb: (payload: unknown) => void): (() => void) => {
+    const listener = (_event: unknown, payload: unknown) => cb(payload);
+    ipcRenderer.on("conditionalColumn:applied", listener);
+    return () => ipcRenderer.removeListener("conditionalColumn:applied", listener);
+  },
+  requestConditionalColumnInit: (nodeId: string): Promise<unknown> => ipcRenderer.invoke("conditionalColumn:request-init", nodeId),
+  onConditionalColumnInit: (cb: (payload: unknown) => void): (() => void) => {
+    const listener = (_event: unknown, payload: unknown) => cb(payload);
+    ipcRenderer.on("conditionalColumn:init", listener);
+    return () => ipcRenderer.removeListener("conditionalColumn:init", listener);
+  },
+  applyConditionalColumn: (payload: unknown): void => {
+    ipcRenderer.send("conditionalColumn:apply", payload);
+  },
+  closeConditionalColumnWindow: (): void => {
+    ipcRenderer.send("conditionalColumn:close");
+  },
+
   // Main window: closes whichever kept-alive window (Configure or Browse)
   // is currently showing this node, if any -- called once per deleted
   // processor node so an open per-node window doesn't outlive the node

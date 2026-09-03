@@ -18,7 +18,7 @@ export interface FormulaToken {
 // -- purely for highlighting/autocomplete here, so a mismatch is cosmetic
 // (a function the backend supports just wouldn't get colored/suggested),
 // never a correctness issue for what the formula actually does.
-export const FORMULA_FUNCTIONS = ["UPPER", "LOWER", "TRIM", "LEN", "CONCAT", "ROUND", "LEFT", "RIGHT", "ABS"];
+export const FORMULA_FUNCTIONS = ["IF", "AND", "OR", "CONTAINS", "UPPER", "LOWER", "TRIM", "LEN", "CONCAT", "ROUND", "LEFT", "RIGHT", "ABS"];
 
 const IDENTIFIER_CHAR = /[A-Za-z_0-9]/;
 const OPERATOR_CHAR = /[+\-*/%^]/;
@@ -74,6 +74,28 @@ export function tokenizeFormula(src: string): FormulaToken[] {
       continue;
     }
 
+    // Comparison operators -- Power Query's own `=`/`<>` for equality/
+    // inequality (rewritten to Python's `==`/`!=` server-side before
+    // evaluating, see backend/app/nodes.py's _parse_formula), plus `==`,
+    // `!=`, `<=`, `>=`, `<`, `>` for anyone who types the Python/Excel
+    // forms out of habit. Two-char forms matched greedily before the
+    // single-char fallback.
+    if (ch === "=" || ch === "<" || ch === ">" || ch === "!") {
+      const two = src.slice(i, i + 2);
+      if (two === "==" || two === "!=" || two === "<=" || two === ">=" || two === "<>") {
+        tokens.push({ type: "operator", text: two });
+        i += 2;
+        continue;
+      }
+      if (ch === "=" || ch === "<" || ch === ">") {
+        tokens.push({ type: "operator", text: ch });
+        i++;
+        continue;
+      }
+      // A lone "!" isn't valid on its own -- falls through to the plain-
+      // text bucket below so it still highlights as unrecognized.
+    }
+
     if (ch === "(" || ch === ")" || ch === ",") {
       tokens.push({ type: "paren", text: ch });
       i++;
@@ -89,6 +111,10 @@ export function tokenizeFormula(src: string): FormulaToken[] {
       src[j] !== '"' &&
       !/[0-9A-Za-z_]/.test(src[j]) &&
       !OPERATOR_CHAR.test(src[j]) &&
+      src[j] !== "=" &&
+      src[j] !== "<" &&
+      src[j] !== ">" &&
+      src[j] !== "!" &&
       src[j] !== "(" &&
       src[j] !== ")" &&
       src[j] !== ","
@@ -168,6 +194,10 @@ export function splitTokensAtCursor(tokens: FormulaToken[], cursor: number): For
 // (same reasoning as that list's own comment: a mismatch here is cosmetic,
 // never a correctness issue for what the formula actually does).
 export const FUNCTION_SIGNATURES: Record<string, { params: string[]; description: string }> = {
+  IF: { params: ["condition", "value if true", "value if false"], description: "Returns one value if condition is true, another if it's false. condition is a comparison, like [A] = [B] or [A] > 10." },
+  CONTAINS: { params: ["text", "substring"], description: "True if text contains substring, false otherwise." },
+  AND: { params: ["condition1", "condition2", "…"], description: "True only if every condition is true." },
+  OR: { params: ["condition1", "condition2", "…"], description: "True if any condition is true." },
   UPPER: { params: ["text"], description: "Converts text to uppercase." },
   LOWER: { params: ["text"], description: "Converts text to lowercase." },
   TRIM: { params: ["text"], description: "Removes leading and trailing spaces." },
@@ -224,9 +254,11 @@ export function getFunctionCallContext(text: string, cursor: number): FormulaCal
 }
 
 // A best-effort recursive-descent check of the SAME grammar backend/app/
-// nodes.py's export_data safe evaluator actually walks (expr := term (+
-// or - term)*, term := factor (* / % or ^ factor)*, factor := unary +/-
-// or an atom, atom := number/string/[Column]/FUNC(args)/(expr)) -- catches
+// nodes.py's export_data safe evaluator actually walks (expr := comparison,
+// comparison := arith ((= or == or <> or != or < or <= or > or >=) arith)*,
+// arith := term (+ or - term)*, term := factor (* / % or ^ factor)*,
+// factor := unary +/- or an atom, atom := number/string/[Column]/
+// FUNC(args)/(expr)) -- catches
 // the same shapes of mistake a user typing a real formula actually makes
 // (an unclosed bracket/paren/string, an unknown column or function name,
 // a dangling operator) WITHOUT needing a full re-implementation of the
@@ -245,7 +277,23 @@ export function validateFormula(text: string, columns: string[]): string | null 
   const peek = () => tokens[pos];
   const advance = () => tokens[pos++];
 
+  const COMPARISON_OPS = ["=", "==", "<>", "!=", "<", "<=", ">", ">="];
   function parseExpr(): string | null {
+    const first = parseComparison();
+    if (first) return first;
+    return null;
+  }
+  function parseComparison(): string | null {
+    const first = parseArith();
+    if (first) return first;
+    while (peek() && peek().type === "operator" && COMPARISON_OPS.includes(peek().text)) {
+      advance();
+      const err = parseArith();
+      if (err) return err;
+    }
+    return null;
+  }
+  function parseArith(): string | null {
     const first = parseTerm();
     if (first) return first;
     while (peek() && peek().type === "operator" && (peek().text === "+" || peek().text === "-")) {

@@ -1,4 +1,4 @@
-﻿import React, {
+import React, {
   useState,
   useEffect,
   useRef,
@@ -2570,6 +2570,11 @@ const KonvaA4Editor = () => {
   }, [handleUpdateProcessorNodeParams]);
   useEffect(() => {
     return window.alteraStudio.onAddColumnApplied(({ nodeId, params }) => {
+      handleUpdateProcessorNodeParams(nodeId, params as unknown as Record<string, unknown>);
+    });
+  }, [handleUpdateProcessorNodeParams]);
+  useEffect(() => {
+    return window.alteraStudio.onConditionalColumnApplied(({ nodeId, params }) => {
       handleUpdateProcessorNodeParams(nodeId, params as unknown as Record<string, unknown>);
     });
   }, [handleUpdateProcessorNodeParams]);

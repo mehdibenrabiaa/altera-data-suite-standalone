@@ -88,6 +88,12 @@ export default function AddColumnWindow() {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [popupPos, setPopupPos] = useState<{ left: number; top: number } | null>(null);
   const [hintPos, setHintPos] = useState<{ left: number; bottom: number } | null>(null);
+  // Escape dismisses the argument-hint tooltip without closing the whole
+  // formula box -- but only until the user actually resumes typing (not
+  // just moving the caret around), since a dismissal that stuck forever
+  // would mean never seeing the hint again for the rest of this edit.
+  const [hintDismissed, setHintDismissed] = useState(false);
+  useEffect(() => { setHintDismissed(false); }, [formula]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const highlightRef = useRef<HTMLDivElement>(null);
   const caretMarkerRef = useRef<HTMLSpanElement>(null);
@@ -149,7 +155,7 @@ export default function AddColumnWindow() {
   // ROUND(...) wants both at once).
   const functionCallCtx = useMemo(() => getFunctionCallContext(formula, cursorPos), [formula, cursorPos]);
   const functionSignature = functionCallCtx ? FUNCTION_SIGNATURES[functionCallCtx.name] : undefined;
-  const hintVisible = !!functionSignature;
+  const hintVisible = !!functionSignature && !hintDismissed;
 
   // Live syntax check -- backend/app/nodes.py's own grammar, re-walked
   // client-side (see validateFormula's own comment for why this doesn't
@@ -250,6 +256,10 @@ export default function AddColumnWindow() {
   // popup is actually showing, so plain Tab/Enter/arrows behave normally
   // (move focus, insert a newline, move the caret) the rest of the time.
   const handleFormulaKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Escape" && hintVisible) {
+      e.preventDefault();
+      setHintDismissed(true);
+    }
     if (!popupVisible || !activeSuggestions) return;
     if (e.key === "ArrowDown") {
       e.preventDefault();
@@ -353,7 +363,7 @@ export default function AddColumnWindow() {
                   <p className="formula-error-hint">{validationError}</p>
                 ) : (
                   <p className="change-type-hint">
-                    Reference a column with [Column Name]. Operators: + − × ÷ (+ also joins text). Functions: UPPER, LOWER, TRIM, LEN, CONCAT, ROUND, LEFT, RIGHT, ABS. ↑↓ to choose, Tab/Enter to accept.
+                    Reference a column with [Column Name]. Operators: + − × ÷ (+ also joins text), {"= <> < <= > >="} to compare. Functions: IF, AND, OR, CONTAINS, UPPER, LOWER, TRIM, LEN, CONCAT, ROUND, LEFT, RIGHT, ABS. ↑↓ to choose, Tab/Enter to accept.
                   </p>
                 )}
               </div>

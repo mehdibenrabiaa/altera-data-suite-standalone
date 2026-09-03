@@ -883,6 +883,14 @@ _ALLOWED_UNARYOPS: dict[type, Callable[[Any], Any]] = {
     ast.UAdd: operator.pos,
     ast.USub: operator.neg,
 }
+_ALLOWED_CMPOPS: dict[type, Callable[[Any, Any], bool]] = {
+    ast.Eq: operator.eq,
+    ast.NotEq: operator.ne,
+    ast.Lt: operator.lt,
+    ast.LtE: operator.le,
+    ast.Gt: operator.gt,
+    ast.GtE: operator.ge,
+}
 
 
 def _formula_to_number(v: Any) -> float:
@@ -906,7 +914,24 @@ _FORMULA_FUNCTIONS: dict[str, Callable[..., Any]] = {
     "LEFT": lambda s, n: str(s)[: int(n)],
     "RIGHT": lambda s, n: str(s)[-int(n):] if int(n) > 0 else "",
     "ABS": lambda n: abs(_formula_to_number(n)),
+    "CONTAINS": lambda s, sub: str(sub) in str(s),
+    "AND": lambda *args: _formula_bool_all(args, ok=all),
+    "OR": lambda *args: _formula_bool_all(args, ok=any),
+    "NOT": lambda a: _formula_not(a),
 }
+
+
+def _formula_bool_all(args: tuple, ok: Callable[[tuple], bool]) -> bool:
+    for a in args:
+        if not isinstance(a, bool):
+            raise _FormulaError("AND/OR's arguments must be comparisons, like [A] = [B] or [A] > 10.")
+    return ok(args)
+
+
+def _formula_not(a: Any) -> bool:
+    if not isinstance(a, bool):
+        raise _FormulaError("NOT's argument must be a comparison, like [A] = [B] or CONTAINS([A], \"x\").")
+    return not a
 
 
 def _eval_formula_node(node: ast.AST, row_values: dict[str, Any]) -> Any:
@@ -932,8 +957,41 @@ def _eval_formula_node(node: ast.AST, row_values: dict[str, Any]) -> Any:
         return _ALLOWED_BINOPS[type(node.op)](_formula_to_number(left), _formula_to_number(right))
     if isinstance(node, ast.UnaryOp) and type(node.op) in _ALLOWED_UNARYOPS:
         return _ALLOWED_UNARYOPS[type(node.op)](_formula_to_number(_eval_formula_node(node.operand, row_values)))
+    if isinstance(node, ast.Compare):
+        # Power Query's own `=`/`<>` equality operators are rewritten to
+        # `==`/`!=` in _parse_formula before this ever runs (Python's own
+        # `=` can't appear in an expression at all). Chained comparisons
+        # (`1 < [x] < 10`) work the same way Python evaluates them.
+        left = _eval_formula_node(node.left, row_values)
+        for op, comparator in zip(node.ops, node.comparators):
+            if type(op) not in _ALLOWED_CMPOPS:
+                raise _FormulaError("Unsupported comparison operator.")
+            right = _eval_formula_node(comparator, row_values)
+            try:
+                ok = _ALLOWED_CMPOPS[type(op)](left, right)
+            except TypeError:
+                raise _FormulaError(f'Can\'t compare "{left}" and "{right}".')
+            if not ok:
+                return False
+            left = right
+        return True
     if isinstance(node, ast.Call):
         func_name = node.func.id if isinstance(node.func, ast.Name) else None
+        if func_name == "IF":
+            # Handled here rather than as a plain _FORMULA_FUNCTIONS entry
+            # so it can be LAZY -- only the branch actually taken gets
+            # evaluated. That's not just an optimization: it's what makes
+            # the classic spreadsheet pattern IF([x] <> 0, [y] / [x], 0)
+            # safe, the same way it is in Excel. Eagerly evaluating both
+            # branches (like every other function here) would run the
+            # division on every row, including the [x] = 0 ones the IF is
+            # there to guard against.
+            if len(node.args) != 3 or node.keywords:
+                raise _FormulaError("IF needs 3 arguments: IF(condition, value if true, value if false).")
+            condition = _eval_formula_node(node.args[0], row_values)
+            if not isinstance(condition, bool):
+                raise _FormulaError("IF's first argument must be a comparison, like [A] = [B] or [A] > 10.")
+            return _eval_formula_node(node.args[1] if condition else node.args[2], row_values)
         if not func_name or func_name not in _FORMULA_FUNCTIONS or node.keywords:
             raise _FormulaError(f"Unknown function: {func_name or '?'}")
         args = [_eval_formula_node(a, row_values) for a in node.args]
@@ -966,6 +1024,13 @@ def _parse_formula(formula: str, columns: list[str]) -> tuple[ast.Expression, di
         return sid
 
     rewritten = _COLUMN_REF_RE.sub(_replace, formula)
+    # Power Query's own equality/inequality operators (`=`, `<>`) rather
+    # than Python's (`==`, `!=`) -- this is Power Query's own "Add Custom
+    # Column" in spirit, so `[a] = [b]` should work the way a PQ user
+    # already expects, not require them to know Python's `==`. Bare `=`
+    # only (the lookaround leaves `==`, `!=`, `<=`, `>=` alone).
+    rewritten = rewritten.replace("<>", "!=")
+    rewritten = re.sub(r"(?<![=!<>])=(?!=)", "==", rewritten)
     try:
         tree = ast.parse(rewritten, mode="eval")
     except SyntaxError as e:
@@ -1002,6 +1067,86 @@ def add_column(dfs: list[pd.DataFrame], params: dict[str, Any]) -> tuple[pd.Data
     result = df.copy()
     result[final_name] = [str(v) for v in values]
     return result, [], []
+
+
+# ── Add Column (conditional) ─────────────────────────────────────────────
+# Power Query's own "Add Conditional Column" -- the low-code sibling of
+# Add Custom Column (the formula-based `add_column` above, now surfaced to
+# the user as "Formula"): an ORDERED list of clauses, each a Filter
+# Builder-style condition group (same AND/OR group model, same
+# _apply_condition this module's own Filter Builder already uses) paired
+# with an output value, evaluated top-to-bottom with the first matching
+# clause winning (a row already claimed by an earlier clause is never
+# reconsidered by a later one, same "first match wins" semantics PQ's own
+# conditional column has) -- with a required Else value for whatever
+# matches no clause at all.
+def _resolve_output_values(value_str: str, df: pd.DataFrame, mask: "pd.Series[bool]") -> pd.Series:
+    """Evaluates a clause's "Then set to"/"Otherwise" text as a formula --
+    the SAME engine (and [Column] bracket syntax, operators, IF/AND/OR/
+    CONTAINS/...) the Formula node's own add_column uses -- against every
+    row `mask` selects, so the output can be a plain value, a column
+    reference like [Amount], or an expression like [A] + [B]. Plain
+    literal text (e.g. "High") is never valid formula syntax on its own
+    (a bare, un-bracketed word isn't a recognized reference), so it falls
+    straight through to being used as a literal for every row -- meaning
+    a user who just wants to type an output value never needs to think
+    about this at all, and only someone reaching for a column ref or an
+    expression needs the [Column] syntax.
+    """
+    if not mask.any():
+        return pd.Series([], index=df.index[mask], dtype=object)
+    try:
+        tree, ref_map = _parse_formula(value_str, list(df.columns))
+    except _FormulaError:
+        return pd.Series([value_str] * int(mask.sum()), index=df.index[mask])
+    values = []
+    for idx in df.index[mask]:
+        row = df.loc[idx]
+        row_values = {sid: row[col] for sid, col in ref_map.items()}
+        try:
+            values.append(_eval_formula_node(tree, row_values))
+        except _FormulaError:
+            values.append(value_str)
+    return pd.Series(values, index=df.index[mask])
+
+
+def conditional_column(dfs: list[pd.DataFrame], params: dict[str, Any]) -> tuple[pd.DataFrame, list[str], list[str]]:
+    if not dfs:
+        raise ValueError("Add Column needs a connected input table.")
+    df = dfs[0]
+    new_column_name = (params.get("columnName") or "").strip()
+    clauses = params.get("clauses") or []
+    else_value = params.get("elseValue", "")
+    if not new_column_name:
+        raise ValueError("Give the new column a name.")
+    if not clauses:
+        raise ValueError("Add at least one condition.")
+
+    warnings: list[str] = []
+    values = pd.Series([None] * len(df), index=df.index, dtype=object)
+    assigned = pd.Series(False, index=df.index)
+    for clause in clauses:
+        group = clause.get("group") or {}
+        conditions = group.get("conditions") or []
+        masks = [m for c in conditions if (m := _apply_condition(df, c, warnings)) is not None]
+        if not masks:
+            continue
+        combine = np.logical_and.reduce if group.get("match", "all") == "all" else np.logical_or.reduce
+        clause_mask = pd.Series(combine(masks), index=df.index) & ~assigned
+        values.loc[clause_mask] = _resolve_output_values(clause.get("outputValue", ""), df, clause_mask)
+        assigned = assigned | clause_mask
+    else_mask = ~assigned
+    values.loc[else_mask] = _resolve_output_values(else_value, df, else_mask)
+
+    final_name = new_column_name
+    n = 0
+    while final_name in df.columns:
+        n += 1
+        final_name = f"{new_column_name}_{n}"
+
+    result = df.copy()
+    result[final_name] = values.astype(str)
+    return result, warnings, []
 
 
 # ── Unpivot Columns ──────────────────────────────────────────────────────
@@ -1182,5 +1327,6 @@ NODE_TRANSFORMS: dict[str, Callable[[list[pd.DataFrame], dict[str, Any]], tuple[
     "unpivot_columns": unpivot_columns,
     "pivot_columns": pivot_columns,
     "add_column": add_column,
+    "conditional_column": conditional_column,
     "concatenate": concatenate,
 }

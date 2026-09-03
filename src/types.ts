@@ -510,6 +510,27 @@ export interface AddColumnParams {
   formula: string;
 }
 
+// The low-code sibling of the formula-based Add Column above (now
+// surfaced to the user as "Formula") -- Power Query's own "Add
+// Conditional Column": an ORDERED list of clauses, each a Filter
+// Builder-style condition group (reuses FilterGroup/FilterCondition
+// wholesale -- same AND/OR model, same operators, same
+// backend/app/nodes.py _apply_condition evaluates Filter Builder's own
+// conditions with), paired with the value to output when it matches.
+// First matching clause wins (a row already claimed by an earlier clause
+// is never reconsidered by a later one); elseValue covers every row that
+// matches no clause at all.
+export interface ConditionalColumnClause {
+  id: string;
+  group: FilterGroup;
+  outputValue: string;
+}
+export interface ConditionalColumnParams {
+  columnName: string;
+  clauses: ConditionalColumnClause[];
+  elseValue: string;
+}
+
 // Column "type" for a Configure dialog's per-column operator/value-editor
 // choice -- this app's tables are plain {columns, rows} strings with no
 // schema (unlike the original's Orange Domain), so type is inferred from

@@ -1,4 +1,4 @@
-﻿/* Self-hosted (offline) "Google Sans Flex" — the only font this app actually
+/* Self-hosted (offline) "Google Sans Flex" — the only font this app actually
    uses (see body rule below); the Roboto CDN import this replaced was dead
    weight, nothing in the app opts into it. Only the latin/latin-ext subsets
    are bundled since the UI is English-only. Files live in public/fonts/. */
@@ -1165,6 +1165,23 @@ button:focus-visible {
 /* Final logic bar */
 .filter-builder-window .final-logic { font-size: 12px; color: #999; padding: 2px 0; }
 .filter-builder-window .final-logic strong { color: #555; }
+
+/* Add Column (conditional)'s "Then set to" row -- the one addition each
+   clause card has beyond Filter Builder's own .filter-group contents. */
+.filter-builder-window .cc-then-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #f0f0f0;
+}
+.filter-builder-window .cc-then-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #555;
+  flex-shrink: 0;
+}
 
 /* Empty state (no input table connected/converted yet) -- shared by every
    Configure/viewer window in the app (Filter Builder, Header Promoter,
@@ -4114,6 +4131,20 @@ body.dock-dragging .dock-style-canvas-dock-panel {
   background: #ffe0d6;
   color: #000000;
 }
+
+/* Excel-style click-and-drag range selection (see gridCellCopy.tsx's own
+   comment for why this is hand-built instead of AG-Grid's own Enterprise-
+   only range selection) -- a light fill on every cell in the range, plus
+   a solid border only on whichever edge(s) of the range each individual
+   cell actually sits on, so the group of cells reads as one rectangular
+   outline rather than each cell having its own full border. */
+.grid-range-cell {
+  background-color: rgba(254, 77, 65, 0.08) !important;
+}
+.grid-range-top { border-top: 1.5px solid #FE4D41 !important; }
+.grid-range-bottom { border-bottom: 1.5px solid #FE4D41 !important; }
+.grid-range-left { border-left: 1.5px solid #FE4D41 !important; }
+.grid-range-right { border-right: 1.5px solid #FE4D41 !important; }
 .ctx-menu-item.disabled {
   color: #aaaaaa;
   cursor: default;

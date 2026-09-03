@@ -242,7 +242,7 @@ ipcMain.on("settings:close", () => {
 // in the Maps below. Actually destroyed (not just hidden) when the node
 // itself is deleted (see node:deleted further down), since a deleted
 // node's window can never be reopened and would otherwise leak forever.
-function createPerNodeWindowManager(kind: "filterBuilder" | "browse" | "headerPromoter" | "merge" | "shiftColumns" | "cleaner" | "unique" | "columnEdit" | "changeType" | "regex" | "cascadeFill" | "export" | "unpivotColumns" | "pivotColumns" | "addColumn", opts: {
+function createPerNodeWindowManager(kind: "filterBuilder" | "browse" | "headerPromoter" | "merge" | "shiftColumns" | "cleaner" | "unique" | "columnEdit" | "changeType" | "regex" | "cascadeFill" | "export" | "unpivotColumns" | "pivotColumns" | "addColumn" | "conditionalColumn", opts: {
   width: number; height: number; minWidth: number; minHeight: number; title: string; htmlFile: string; icon?: string;
 }) {
   const windows = new Map<string, BrowserWindow>();
@@ -539,11 +539,25 @@ ipcMain.on("pivotColumns:apply", (event, payload: { nodeId: string; [key: string
 // every other Configure window above.
 const addColumnManager = createPerNodeWindowManager("addColumn", {
   width: 520, height: 560, minWidth: 440, minHeight: 460, title: "Configure Node", htmlFile: "add-column.html",
-  icon: path.join(__dirname, "../public/node-icons/add_column.png"),
+  icon: path.join(__dirname, "../public/node-icons/formula.png"),
 });
 
 ipcMain.on("addColumn:apply", (event, payload: { nodeId: string; [key: string]: unknown }) => {
   win?.webContents.send("addColumn:applied", payload);
+  BrowserWindow.fromWebContents(event.sender)?.hide();
+});
+
+// Add Column (conditional) -- Power Query's own "Add Conditional Column",
+// the low-code sibling of the formula-based Add Column above (now
+// surfaced as "Formula"). Same real-Configure-window,
+// round-trips-on-Apply shape as every other Configure window here.
+const conditionalColumnManager = createPerNodeWindowManager("conditionalColumn", {
+  width: 640, height: 640, minWidth: 520, minHeight: 460, title: "Configure Node", htmlFile: "conditional-column.html",
+  icon: path.join(__dirname, "../public/node-icons/conditional_column.png"),
+});
+
+ipcMain.on("conditionalColumn:apply", (event, payload: { nodeId: string; [key: string]: unknown }) => {
+  win?.webContents.send("conditionalColumn:applied", payload);
   BrowserWindow.fromWebContents(event.sender)?.hide();
 });
 
@@ -584,6 +598,7 @@ ipcMain.on("node:deleted", (_event, nodeId: string) => {
   unpivotColumnsManager.closeForNode(nodeId);
   pivotColumnsManager.closeForNode(nodeId);
   addColumnManager.closeForNode(nodeId);
+  conditionalColumnManager.closeForNode(nodeId);
 });
 
 // Native File/Edit/View/Window/Help menu replaced by an in-page menu bar

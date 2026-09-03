@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 
-import type { SettingsPayload, PersistedSettings, FilterBuilderParams, FilterColumnDefinition, HeaderPromoterParams, MergeParams, ShiftColumnsParams, CleanerParams, UniqueParams, ColumnEditParams, ChangeTypeParams, RegexParams, CascadeFillParams, ExportParams, UnpivotColumnsParams, PivotColumnsParams, AddColumnParams } from "./types";
+import type { SettingsPayload, PersistedSettings, FilterBuilderParams, FilterColumnDefinition, HeaderPromoterParams, MergeParams, ShiftColumnsParams, CleanerParams, UniqueParams, ColumnEditParams, ChangeTypeParams, RegexParams, CascadeFillParams, ExportParams, UnpivotColumnsParams, PivotColumnsParams, AddColumnParams, ConditionalColumnParams } from "./types";
 import type { AppliedColumnType } from "./columnTypeDetection";
 
 // Mirrors the original devkit/filter-builder project's own ExtraColumnDef
@@ -244,6 +244,17 @@ export interface AddColumnAppliedPayload {
   params: AddColumnParams;
 }
 
+export interface ConditionalColumnWindowPayload {
+  nodeId: string;
+  nodeName: string;
+  initialParams: ConditionalColumnParams;
+  inputColumns: FilterColumnDefinition[];
+}
+export interface ConditionalColumnAppliedPayload {
+  nodeId: string;
+  params: ConditionalColumnParams;
+}
+
 declare global {
   interface Window {
     alteraStudio: {
@@ -481,6 +492,17 @@ declare global {
       onAddColumnInit: (cb: (payload: AddColumnWindowPayload) => void) => () => void;
       applyAddColumn: (payload: AddColumnAppliedPayload) => void;
       closeAddColumnWindow: () => void;
+
+      // Main window: open (or focus/reseed) the separate conditional Add
+      // Column configure window for one node -- same real-window pattern
+      // as every other Configure window above, including round-tripping
+      // edits back on Apply.
+      openConditionalColumnWindow: (payload: ConditionalColumnWindowPayload) => void;
+      onConditionalColumnApplied: (cb: (payload: ConditionalColumnAppliedPayload) => void) => () => void;
+      requestConditionalColumnInit: (nodeId: string) => Promise<ConditionalColumnWindowPayload>;
+      onConditionalColumnInit: (cb: (payload: ConditionalColumnWindowPayload) => void) => () => void;
+      applyConditionalColumn: (payload: ConditionalColumnAppliedPayload) => void;
+      closeConditionalColumnWindow: () => void;
 
       // Main window: closes whichever kept-alive per-node window
       // (Configure, Browse, Header Promoter, Merge, Shift Columns,

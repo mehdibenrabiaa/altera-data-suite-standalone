@@ -249,7 +249,7 @@ function HighlightCell(props: ICellRendererParams) {
 }
 
 export default function RegexWindow() {
-  const { onCellKeyDown, onCellContextMenu, suppressContextMenu, contextMenu } = useGridCellCopy();
+  const { onCellKeyDown, onCellContextMenu, suppressContextMenu, contextMenu, onGridReady: onRangeGridReady, onCellMouseDown, onCellMouseOver, rangeCellClass } = useGridCellCopy();
   const [payload, setPayload] = useState<RegexWindowPayload | null>(null);
   const [column, setColumn] = useState("");
   const [pattern, setPattern] = useState("");
@@ -335,10 +335,15 @@ export default function RegexWindow() {
       ...extractedColumns.map((col, i): ColDef => ({
         field: `__ext${i}`,
         headerName: col.name,
-        cellClass: "regex-extracted-cell",
+        // Combines the static extracted-column tint with the range-
+        // selection highlight (see gridCellCopy.tsx) -- a plain static
+        // cellClass string here would override defaultColDef's own
+        // cellClass function entirely, silently excluding these columns
+        // from range selection.
+        cellClass: (params) => ["regex-extracted-cell", rangeCellClass(params)].filter(Boolean).join(" "),
       })),
     ],
-    [rowData.length, column, extractedColumns],
+    [rowData.length, column, extractedColumns, rangeCellClass],
   );
   const gridContext = useMemo(() => ({ compiledPattern }), [compiledPattern]);
 
@@ -424,10 +429,12 @@ export default function RegexWindow() {
                 theme={regexGridTheme}
                 rowData={rowData}
                 columnDefs={colDefs}
-                defaultColDef={regexGridDefaultColDef}
+                defaultColDef={{ ...regexGridDefaultColDef, cellClass: rangeCellClass }}
                 context={gridContext}
                 suppressFieldDotNotation
-                onGridReady={(e) => { gridApiRef.current = e.api; }}
+                onGridReady={(e) => { gridApiRef.current = e.api; onRangeGridReady(e); }}
+                onCellMouseDown={onCellMouseDown}
+                onCellMouseOver={onCellMouseOver}
                 onCellKeyDown={onCellKeyDown}
                 onCellContextMenu={onCellContextMenu}
                 suppressContextMenu={suppressContextMenu}
