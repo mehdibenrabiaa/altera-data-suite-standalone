@@ -114,6 +114,29 @@ ipcMain.handle("dialog:openPdf", async () => {
   return canceled ? null : filePaths[0];
 });
 
+// Input Data's own file picker -- same shape as dialog:openPdf above, but
+// an openFile+filters dialog (not save) restricted to the formats
+// backend/app/nodes.py's file_input actually knows how to read. Scoped to
+// the Configure window itself (BrowserWindow.fromWebContents(event.sender))
+// rather than always the main window, matching export:chooseFile/
+// chooseFolder below -- this dialog is always triggered from Input Data's
+// own per-node window, never the main one.
+ipcMain.handle("inputData:chooseFile", async (event) => {
+  const owner = BrowserWindow.fromWebContents(event.sender) ?? win;
+  if (!owner) return null;
+  const { canceled, filePaths } = await dialog.showOpenDialog(owner, {
+    title: "Choose Data File",
+    filters: [
+      { name: "Excel/CSV Files", extensions: ["xlsx", "xls", "csv", "tsv"] },
+      { name: "Excel Workbook", extensions: ["xlsx", "xls"] },
+      { name: "CSV/TSV", extensions: ["csv", "tsv"] },
+      { name: "All Files", extensions: ["*"] },
+    ],
+    properties: ["openFile"],
+  });
+  return canceled || filePaths.length === 0 ? null : filePaths[0];
+});
+
 // The renderer can't fetch() a file:// URL (Chromium blocks it for a page
 // loaded from http://localhost or a packaged file:// origin doesn't get CORS
 // headers either) -- read the bytes here on the Node side instead.
@@ -242,7 +265,7 @@ ipcMain.on("settings:close", () => {
 // in the Maps below. Actually destroyed (not just hidden) when the node
 // itself is deleted (see node:deleted further down), since a deleted
 // node's window can never be reopened and would otherwise leak forever.
-function createPerNodeWindowManager(kind: "filterBuilder" | "browse" | "headerPromoter" | "merge" | "shiftColumns" | "cleaner" | "unique" | "columnEdit" | "changeType" | "regex" | "cascadeFill" | "export" | "unpivotColumns" | "pivotColumns" | "addColumn" | "conditionalColumn", opts: {
+function createPerNodeWindowManager(kind: "filterBuilder" | "browse" | "summary" | "headerPromoter" | "merge" | "shiftColumns" | "cleaner" | "textParser" | "unique" | "columnEdit" | "changeType" | "regex" | "cascadeFill" | "export" | "unpivotColumns" | "pivotColumns" | "addColumn" | "conditionalColumn" | "inputData" | "sort" | "aggregate", opts: {
   width: number; height: number; minWidth: number; minHeight: number; title: string; htmlFile: string; icon?: string;
 }) {
   const windows = new Map<string, BrowserWindow>();
@@ -353,6 +376,14 @@ const browseManager = createPerNodeWindowManager("browse", {
   icon: path.join(__dirname, "../public/node-icons/browse.png"),
 });
 
+// Summary -- same pure-viewer shape as Browse above (nothing to edit/
+// apply back), just a per-column stats/distribution view instead of a
+// raw data grid.
+const summaryManager = createPerNodeWindowManager("summary", {
+  width: 720, height: 680, minWidth: 480, minHeight: 400, title: "Summary", htmlFile: "summary.html",
+  icon: path.join(__dirname, "../public/node-icons/summary.png"),
+});
+
 // Header Promoter -- same "real Configure window, round-trips edited
 // params back to the main window on Apply" shape as Filter Builder above.
 const headerPromoterManager = createPerNodeWindowManager("headerPromoter", {
@@ -398,6 +429,59 @@ const cleanerManager = createPerNodeWindowManager("cleaner", {
 
 ipcMain.on("cleaner:apply", (event, payload: { nodeId: string; [key: string]: unknown }) => {
   win?.webContents.send("cleaner:applied", payload);
+  BrowserWindow.fromWebContents(event.sender)?.hide();
+});
+
+// Text Parser -- same real-Configure-window, round-trips-on-Apply shape
+// as Cleaner above.
+const textParserManager = createPerNodeWindowManager("textParser", {
+  width: 720, height: 640, minWidth: 560, minHeight: 420, title: "Configure Node", htmlFile: "text-parser.html",
+  icon: path.join(__dirname, "../public/node-icons/text_parser.png"),
+});
+
+ipcMain.on("textParser:apply", (event, payload: { nodeId: string; [key: string]: unknown }) => {
+  win?.webContents.send("textParser:applied", payload);
+  BrowserWindow.fromWebContents(event.sender)?.hide();
+});
+
+// Input Data -- same real-Configure-window, round-trips-on-Apply shape as
+// every other Configure window above. The one thing genuinely different
+// from the rest: this is the catalog's only graph SOURCE node (no upstream
+// table -- see backend/app/nodes.py's file_input and nodeCatalog.ts's
+// `hasInput: false`), so its Configure window is also the ONLY place its
+// data ever originates, not just a settings dialog for an already-flowing
+// table.
+const inputDataManager = createPerNodeWindowManager("inputData", {
+  width: 560, height: 420, minWidth: 480, minHeight: 360, title: "Configure Node", htmlFile: "input-data.html",
+  icon: path.join(__dirname, "../public/node-icons/input_data.png"),
+});
+
+ipcMain.on("inputData:apply", (event, payload: { nodeId: string; [key: string]: unknown }) => {
+  win?.webContents.send("inputData:applied", payload);
+  BrowserWindow.fromWebContents(event.sender)?.hide();
+});
+
+// Sort -- same real-Configure-window, round-trips-on-Apply shape as every
+// other Configure window above.
+const sortManager = createPerNodeWindowManager("sort", {
+  width: 560, height: 560, minWidth: 480, minHeight: 420, title: "Configure Node", htmlFile: "sort.html",
+  icon: path.join(__dirname, "../public/node-icons/sort.png"),
+});
+
+ipcMain.on("sort:apply", (event, payload: { nodeId: string; [key: string]: unknown }) => {
+  win?.webContents.send("sort:applied", payload);
+  BrowserWindow.fromWebContents(event.sender)?.hide();
+});
+
+// Aggregate -- same real-Configure-window, round-trips-on-Apply shape as
+// every other Configure window above.
+const aggregateManager = createPerNodeWindowManager("aggregate", {
+  width: 560, height: 560, minWidth: 480, minHeight: 420, title: "Configure Node", htmlFile: "aggregate.html",
+  icon: path.join(__dirname, "../public/node-icons/aggregate.png"),
+});
+
+ipcMain.on("aggregate:apply", (event, payload: { nodeId: string; [key: string]: unknown }) => {
+  win?.webContents.send("aggregate:applied", payload);
   BrowserWindow.fromWebContents(event.sender)?.hide();
 });
 
@@ -575,6 +659,10 @@ ipcMain.on("browse:push-update", (_event, payload: { nodeId: string; [key: strin
   browseManager.pushUpdate(payload);
 });
 
+ipcMain.on("summary:push-update", (_event, payload: { nodeId: string; [key: string]: unknown }) => {
+  summaryManager.pushUpdate(payload);
+});
+
 // Closes (for real -- see createPerNodeWindowManager's closeForNode)
 // whichever of these per-node windows exist for the given node, if any --
 // called once per deleted processor node (see App.tsx's
@@ -589,6 +677,7 @@ ipcMain.on("node:deleted", (_event, nodeId: string) => {
   mergeManager.closeForNode(nodeId);
   shiftColumnsManager.closeForNode(nodeId);
   cleanerManager.closeForNode(nodeId);
+  textParserManager.closeForNode(nodeId);
   uniqueManager.closeForNode(nodeId);
   columnEditManager.closeForNode(nodeId);
   changeTypeManager.closeForNode(nodeId);
@@ -599,6 +688,10 @@ ipcMain.on("node:deleted", (_event, nodeId: string) => {
   pivotColumnsManager.closeForNode(nodeId);
   addColumnManager.closeForNode(nodeId);
   conditionalColumnManager.closeForNode(nodeId);
+  summaryManager.closeForNode(nodeId);
+  inputDataManager.closeForNode(nodeId);
+  sortManager.closeForNode(nodeId);
+  aggregateManager.closeForNode(nodeId);
 });
 
 // Native File/Edit/View/Window/Help menu replaced by an in-page menu bar

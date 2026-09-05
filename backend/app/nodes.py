@@ -40,6 +40,22 @@ def _make_unique_column_names(columns: list[str]) -> list[str]:
     return unique
 
 
+def _merged_column_types(dfs: list[pd.DataFrame]) -> dict[str, str]:
+    # Best-effort column_types (see routers/nodes.py's own comment) for a
+    # transform whose surviving columns keep their ORIGINAL names --
+    # unions every input df's own column_types (set on it by run_node from
+    # the request's per-input columnTypes), later dfs winning on a name
+    # collision. Callers whose transform renames and/or drops columns
+    # (Horizontal Stack, Merge, Header Promoter, Column Edit, Index
+    # Column, Cleaner) build their own mapping instead of using this
+    # directly -- this is only correct when a df's column keeps its exact
+    # original name straight through to the result.
+    merged: dict[str, str] = {}
+    for df in dfs:
+        merged.update(df.attrs.get("column_types") or {})
+    return merged
+
+
 def horizontal_stack(dfs: list[pd.DataFrame], params: dict[str, Any]) -> tuple[pd.DataFrame, list[str], list[str]]:
     # Ported from OWHStack._p / dataframe_to_orange_table_stacked
     # (devkit/orangecontrib/custom/widgets/horizontal_stack.py,
@@ -69,7 +85,23 @@ def horizontal_stack(dfs: list[pd.DataFrame], params: dict[str, Any]) -> tuple[p
     # on axis=1 aligns by that index, which for two fresh RangeIndexes is
     # exactly positional alignment, NaN-padding whichever frame is shorter.
     result = pd.concat(dfs, axis=1)
-    result.columns = _make_unique_column_names(list(result.columns))
+    # Positional, not name-based: _make_unique_column_names can rename a
+    # column on collision (two input tables both have an "Amount"), so the
+    # column_types map has to be rebuilt walking the SAME dfs/columns
+    # order concat used, zipped against the post-rename names -- a
+    # name-keyed merge (_merged_column_types) would silently lose whichever
+    # column got renamed.
+    new_cols = _make_unique_column_names(list(result.columns))
+    merged_types: dict[str, str] = {}
+    i = 0
+    for df in dfs:
+        types = df.attrs.get("column_types") or {}
+        for col in df.columns:
+            if col in types:
+                merged_types[new_cols[i]] = types[col]
+            i += 1
+    result.columns = new_cols
+    result.attrs["column_types"] = merged_types
     return result, warnings, []
 
 
@@ -92,7 +124,213 @@ def concatenate(dfs: list[pd.DataFrame], params: dict[str, Any]) -> tuple[pd.Dat
     # rather than alphabetizing them.
     result = pd.concat(dfs, ignore_index=True, sort=False)
     result = result.fillna("")
+    # Name-based (not positional -- unlike Horizontal Stack, Concatenate
+    # matches columns by NAME across tables, never renames on collision),
+    # so the plain union is correct here.
+    result.attrs["column_types"] = {k: v for k, v in _merged_column_types(dfs).items() if k in result.columns}
     return result, [], []
+
+
+# ── Bridge ────────────────────────────────────────────────────────────────
+# A pure pass-through -- no config, no transformation, just hands its input
+# straight to the next node. Exists purely for organizing/routing a
+# workflow's connections (e.g. running one table's output to several
+# downstream branches from a single tidy point) rather than doing any real
+# data work, the same role a plain wire junction plays in a schematic.
+def bridge(dfs: list[pd.DataFrame], params: dict[str, Any]) -> tuple[pd.DataFrame, list[str], list[str]]:
+    if not dfs:
+        raise ValueError("Bridge needs a connected input table.")
+    return dfs[0], [], []
+
+
+# ── Input Data ───────────────────────────────────────────────────────────
+# The one node in the catalog that's a graph SOURCE, not a transform -- it
+# takes no upstream table (dfs is always empty; routers/nodes.py's run_node
+# still calls it the same generic way, just with inputs=[]) and instead
+# reads a local .csv/.xlsx/.xls file straight off disk, given its path (and,
+# for a multi-sheet workbook, which sheet) in params. Read WITHOUT forcing
+# dtype=str first (unlike most of this file's string-in-string-out
+# transforms) specifically so pandas' own dtype inference is available to
+# populate column_types below -- run_node's generic .fillna("").astype(str)
+# still stringifies everything for the actual wire format afterward, same
+# as every other node's result.
+def file_input(dfs: list[pd.DataFrame], params: dict[str, Any]) -> tuple[pd.DataFrame, list[str], list[str]]:
+    path = params.get("path")
+    if not path:
+        raise ValueError("No file selected -- click Configure to choose an Excel or CSV file.")
+    p = Path(path)
+    if not p.exists():
+        raise ValueError(f"File not found: {path}")
+
+    ext = p.suffix.lower()
+    try:
+        if ext in (".xlsx", ".xls"):
+            sheet = params.get("sheet") or 0
+            df = pd.read_excel(path, sheet_name=sheet)
+        elif ext in (".csv", ".tsv"):
+            df = pd.read_csv(path, sep="\t" if ext == ".tsv" else ",")
+        else:
+            raise ValueError(f"Unsupported file type: '{ext}' -- choose a .csv or .xlsx file.")
+    except ValueError:
+        raise
+    except Exception as e:
+        raise ValueError(f"Could not read '{p.name}': {e}")
+
+    if isinstance(df, dict):  # sheet_name resolved to more than one sheet somehow
+        raise ValueError("Choose a single sheet.")
+
+    df = df.copy()
+    df.columns = _make_unique_column_names([_denormalize_pandas_header(c) or "Column" for c in df.columns])
+
+    column_types: dict[str, str] = {}
+    for col in df.columns:
+        dt = df[col].dtype
+        if pd.api.types.is_datetime64_any_dtype(dt):
+            column_types[col] = "date"
+        elif pd.api.types.is_numeric_dtype(dt):
+            column_types[col] = "number"
+    df.attrs["column_types"] = column_types
+
+    info = [f"Loaded {len(df)} row(s), {len(df.columns)} column(s) from {p.name}."]
+    return df, [], info
+
+
+_PANDAS_DUPE_SUFFIX = re.compile(r"\.\d+$")
+_PANDAS_UNNAMED = re.compile(r"^Unnamed: \d+$")
+
+
+def _denormalize_pandas_header(raw: Any) -> str:
+    # A raw file's own header row can legitimately have duplicate or blank
+    # column names -- pandas already renames those itself while reading
+    # (blank -> "Unnamed: 2", a repeated "A" -> "A.1"), before this
+    # function ever sees them, in a style that doesn't match this app's own
+    # "_1"-suffix convention (_make_unique_column_names, used everywhere
+    # else a column name could collide). Undoing pandas' own mangling first
+    # and re-running it through that same shared helper keeps a file's
+    # columns looking the same as any other node's, at the small cost of
+    # also unmangling a genuinely-named "Foo.1" column back to "Foo" --
+    # an acceptable trade for consistency, and still a real, usable name
+    # either way.
+    s = str(raw)
+    if _PANDAS_UNNAMED.match(s):
+        return ""
+    return _PANDAS_DUPE_SUFFIX.sub("", s)
+
+
+# ── Sort ─────────────────────────────────────────────────────────────────
+# Multi-key row sort, Excel "Sort" dialog style -- an ordered list of
+# {column, direction} keys, applied together (not one sort per key run in
+# sequence, which would only honor the LAST key -- see the single
+# result.sort_values(by=[...]) call below, not a loop of separate sorts).
+def sort_rows(dfs: list[pd.DataFrame], params: dict[str, Any]) -> tuple[pd.DataFrame, list[str], list[str]]:
+    if not dfs:
+        raise ValueError("Sort needs a connected input table.")
+    df = dfs[0]
+    keys = params.get("keys") or []
+    warnings: list[str] = []
+    valid_keys: list[tuple[str, bool]] = []
+    for k in keys:
+        col = k.get("column")
+        if col not in df.columns:
+            warnings.append(f"Column '{col}' not found -- skipped.")
+            continue
+        valid_keys.append((col, k.get("direction") != "desc"))
+    if not valid_keys:
+        return df, warnings, []  # nothing configured yet -- pass through unchanged
+
+    result = df.copy()
+    sort_columns: list[str] = []
+    ascending: list[bool] = []
+    for i, (col, asc) in enumerate(valid_keys):
+        values = result[col].astype(str)
+        non_blank = values.str.strip() != ""
+        numeric = values.map(_to_number_or_none)
+        # A column sorts numerically only when EVERY non-blank cell in it
+        # parsed as a number -- one stray text cell (a "N/A", a stray
+        # label) falls back to a plain lexicographic sort for the whole
+        # column rather than silently treating that cell as smaller/larger
+        # than every real number, which is what letting NaN sort naturally
+        # would otherwise do.
+        is_numeric_col = bool(non_blank.any()) and numeric[non_blank].notna().all()
+        blank_key = f"__sort_blank_{i}"
+        val_key = f"__sort_val_{i}"
+        # Blank cells always sort last, regardless of this key's own
+        # direction -- matches Excel's own sort behavior, and reads far
+        # more sensibly than "" outranking real values under Descending.
+        result[blank_key] = ~non_blank
+        result[val_key] = numeric if is_numeric_col else values
+        sort_columns.append(blank_key)
+        ascending.append(True)
+        sort_columns.append(val_key)
+        ascending.append(asc)
+
+    result = result.sort_values(by=sort_columns, ascending=ascending, kind="mergesort")
+    result = result.drop(columns=sort_columns).reset_index(drop=True)
+    result.attrs["column_types"] = {k: v for k, v in _merged_column_types(dfs).items() if k in result.columns}
+    return result, warnings, []
+
+
+# ── Aggregate ────────────────────────────────────────────────────────────
+# Alteryx's own Summarize tool (see nodeCatalog.ts's Transform-category
+# comment, which already names it) -- a table's worth of rows collapses
+# into exactly one output row, one column per configured {column,
+# aggregation} metric. No GROUP BY column here (that's a materially bigger
+# feature -- a future node, not this one); every metric summarizes the
+# WHOLE table.
+_AGGREGATE_LABELS = {"sum": "Sum", "average": "Average", "count": "Count", "min": "Min", "max": "Max"}
+
+
+def aggregate_columns(dfs: list[pd.DataFrame], params: dict[str, Any]) -> tuple[pd.DataFrame, list[str], list[str]]:
+    if not dfs:
+        raise ValueError("Aggregate needs a connected input table.")
+    df = dfs[0]
+    metrics = params.get("metrics") or []
+    if not metrics:
+        raise ValueError("Add at least one column to aggregate.")
+
+    warnings: list[str] = []
+    labels: list[str] = []
+    values: list[str] = []
+    for m in metrics:
+        col = m.get("column")
+        agg = m.get("aggregation")
+        if col not in df.columns:
+            warnings.append(f"Column '{col}' not found -- skipped.")
+            continue
+        if agg not in _AGGREGATE_LABELS:
+            raise ValueError(f"Unknown aggregation: {agg}")
+
+        column_values = df[col]
+        if agg == "count":
+            # Count of non-blank cells -- not len(df), which would just be
+            # the same number for every column and defeat the point of
+            # picking a specific column to count.
+            non_blank = column_values.astype(str).str.strip() != ""
+            result_value = str(int(non_blank.sum()))
+        else:
+            numeric = [n for n in (_to_number_or_none(v) for v in column_values) if n is not None]
+            if not numeric:
+                result_value = ""
+                warnings.append(f"'{col}' has no numeric values -- {_AGGREGATE_LABELS[agg]} left blank.")
+            elif agg == "sum":
+                result_value = _format_number(sum(numeric))
+            elif agg == "average":
+                result_value = _format_number(sum(numeric) / len(numeric))
+            elif agg == "min":
+                result_value = _format_number(min(numeric))
+            else:  # "max"
+                result_value = _format_number(max(numeric))
+
+        labels.append(f"{_AGGREGATE_LABELS[agg]} of {col}")
+        values.append(result_value)
+
+    if not labels:
+        raise ValueError("None of the configured columns exist in the input table.")
+
+    labels = _make_unique_column_names(labels)
+    result = pd.DataFrame([values], columns=labels)
+    result.attrs["column_types"] = {label: "number" for label in labels}
+    return result, warnings, []
 
 
 # ── Filter Builder ───────────────────────────────────────────────────────
@@ -256,6 +494,7 @@ def filter_builder(dfs: list[pd.DataFrame], params: dict[str, Any]) -> tuple[pd.
         mask = pd.Series(np.logical_or.reduce(group_masks), index=df.index)
 
     result = df[mask]
+    result.attrs["column_types"] = df.attrs.get("column_types") or {}
     info = [f"Filter matched 0 of {len(df)} rows."] if len(result) == 0 and group_masks else []
     return result, warnings, info
 
@@ -289,8 +528,10 @@ def promote_row_to_header(dfs: list[pd.DataFrame], params: dict[str, Any]) -> tu
         for v, orig in zip(df.iloc[row_index].tolist(), df.columns)
     ]
     new_headers = _make_unique_column_names(new_headers_raw)
+    orig_types = df.attrs.get("column_types") or {}
     result = df.iloc[row_index + 1:].copy() if remove_above else df.drop(df.index[row_index]).copy()
     result.columns = new_headers
+    result.attrs["column_types"] = {new: orig_types[old] for old, new in zip(df.columns, new_headers) if old in orig_types}
     result.reset_index(drop=True, inplace=True)
     return result, [], []
 
@@ -312,9 +553,18 @@ def add_index_column(dfs: list[pd.DataFrame], params: dict[str, Any]) -> tuple[p
     # with the computed name would still collide with the untouched
     # original column and raise ValueError: cannot insert Index, already
     # exists.
-    unique_columns = _make_unique_column_names(["Index"] + list(result.columns))
-    result.columns = unique_columns[1:]
-    result.insert(0, unique_columns[0], range(1, len(result) + 1))
+    orig_cols = list(result.columns)
+    unique_columns = _make_unique_column_names(["Index"] + orig_cols)
+    new_index_name, new_other_cols = unique_columns[0], unique_columns[1:]
+    orig_types = df.attrs.get("column_types") or {}
+    result.columns = new_other_cols
+    result.insert(0, new_index_name, range(1, len(result) + 1))
+    # The new column is always genuinely a whole number, so it can be
+    # tagged directly rather than inherited from anywhere.
+    result.attrs["column_types"] = {
+        new_index_name: "number",
+        **{new: orig_types[old] for old, new in zip(orig_cols, new_other_cols) if old in orig_types},
+    }
     return result, [], []
 
 
@@ -357,7 +607,20 @@ def merge_data(dfs: list[pd.DataFrame], params: dict[str, Any]) -> tuple[pd.Data
         result = pd.concat(
             [left_aligned.reset_index(drop=True), right_aligned.reset_index(drop=True)], axis=1
         )
-        result.columns = _make_unique_column_names(list(result.columns))
+        # Same positional rename handling as Horizontal Stack's own -- see
+        # its comment for why a name-keyed merge would lose a renamed
+        # column here.
+        new_cols = _make_unique_column_names(list(result.columns))
+        merged_types: dict[str, str] = {}
+        i = 0
+        for src in (left, right):
+            types = src.attrs.get("column_types") or {}
+            for col in src.columns:
+                if col in types:
+                    merged_types[new_cols[i]] = types[col]
+                i += 1
+        result.columns = new_cols
+        result.attrs["column_types"] = merged_types
         return result, [], []
 
     pairs = params.get("matchColumns") or []
@@ -374,7 +637,28 @@ def merge_data(dfs: list[pd.DataFrame], params: dict[str, Any]) -> tuple[pd.Data
     # Stack's dedup, Header Promoter's dedup) keeps the FIRST table's
     # names untouched and only decorates the incoming side.
     result = left.merge(right, how=how, left_on=left_on, right_on=right_on, suffixes=("", "_extra"))
-    result.columns = _make_unique_column_names(list(result.columns))
+    # pandas.merge's own column-survival rules (a shared join-key name
+    # collapses to one column; any OTHER name collision gets the "_extra"
+    # suffix on the right side, per suffixes= above) are well-documented
+    # enough to reverse: a pre-rename name matching a left column is
+    # left's; one ending "_extra" maps back to its right-side name minus
+    # the suffix; anything else matches a right column directly (a
+    # right_on column with no name collision on the left, so it passed
+    # through unsuffixed).
+    pre_rename_cols = list(result.columns)
+    new_cols = _make_unique_column_names(pre_rename_cols)
+    left_types = left.attrs.get("column_types") or {}
+    right_types = right.attrs.get("column_types") or {}
+    merged_types: dict[str, str] = {}
+    for old, new in zip(pre_rename_cols, new_cols):
+        if old in left_types:
+            merged_types[new] = left_types[old]
+        elif old.endswith("_extra") and old[:-len("_extra")] in right_types:
+            merged_types[new] = right_types[old[:-len("_extra")]]
+        elif old in right_types:
+            merged_types[new] = right_types[old]
+    result.columns = new_cols
+    result.attrs["column_types"] = merged_types
     return result, [], []
 
 
@@ -409,6 +693,10 @@ def shift_columns(dfs: list[pd.DataFrame], params: dict[str, Any]) -> tuple[pd.D
     for col in selected:
         if col in result.columns:
             result[col] = result[col].shift(shift_amount, fill_value=None)
+    # Column names are untouched and every surviving cell is a real value
+    # that already lived somewhere else in the same column -- shifting
+    # WHERE a number sits doesn't change that it's still a number.
+    result.attrs["column_types"] = df.attrs.get("column_types") or {}
     return result, [], []
 
 
@@ -482,6 +770,7 @@ def clean_columns(dfs: list[pd.DataFrame], params: dict[str, Any]) -> tuple[pd.D
 
     result = df.copy()
     warnings: list[str] = []
+    touched: set[str] = set()
     for op in operations:
         columns = op.get("columns") or []
         operation = op.get("operation")
@@ -491,6 +780,157 @@ def clean_columns(dfs: list[pd.DataFrame], params: dict[str, Any]) -> tuple[pd.D
                 warnings.append(f"Cleaning operation skipped: column '{column}' not found.")
                 continue
             result[column] = _apply_cleaning_operation(result[column], operation, op_params)
+            touched.add(column)
+    # Only columns NO operation ever actually touched can still trust
+    # their inherited type -- an untouched "Amount" column is still
+    # whatever it was; one that had UPPERCASE or Remove Digits run on it
+    # is not something this node can vouch for anymore.
+    orig_types = df.attrs.get("column_types") or {}
+    result.attrs["column_types"] = {k: v for k, v in orig_types.items() if k not in touched}
+    return result, warnings, []
+
+
+# ── Text Parser ──────────────────────────────────────────────────────────
+# Power Query's own no-code text-extraction toolset (Transform > Extract,
+# and Split Column by Delimiter) -- an alternative to the Regular
+# Expressions node for the common cases that don't need a real pattern.
+# Same ordered-operations-list shape as Cleaner's clean_columns above, but
+# each operation ADDS new column(s) computed from one source column
+# rather than mutating it in place.
+def _resolve_occurrence(occurrence: str, count: int) -> "int | None":
+    # "first"/"last"/a 1-based number string -> a 0-based index into
+    # `count` matches, or None if that occurrence doesn't exist (e.g.
+    # "3rd" asked for on a value with only 1 delimiter). Matches how a
+    # non-programmer would actually describe it ("the 2nd comma"), not a
+    # raw 0-based index.
+    if not occurrence or occurrence == "first":
+        idx = 0
+    elif occurrence == "last":
+        idx = count - 1
+    else:
+        try:
+            idx = int(occurrence) - 1
+        except (TypeError, ValueError):
+            idx = 0
+    return idx if 0 <= idx < count else None
+
+
+def _text_before(s: str, delimiter: str, occurrence: str) -> str:
+    if not delimiter:
+        return s
+    parts = s.split(delimiter)
+    if len(parts) < 2:
+        return ""
+    idx = _resolve_occurrence(occurrence, len(parts) - 1)
+    return delimiter.join(parts[: idx + 1]) if idx is not None else ""
+
+
+def _text_after(s: str, delimiter: str, occurrence: str) -> str:
+    if not delimiter:
+        return s
+    parts = s.split(delimiter)
+    if len(parts) < 2:
+        return ""
+    idx = _resolve_occurrence(occurrence, len(parts) - 1)
+    return delimiter.join(parts[idx + 1 :]) if idx is not None else ""
+
+
+def _text_between(s: str, start_delim: str, end_delim: str, start_occ: str, end_occ: str) -> str:
+    middle = _text_after(s, start_delim, start_occ) if start_delim else s
+    return _text_before(middle, end_delim, end_occ) if end_delim else middle
+
+
+def _split_values(s: str, delimiter: str, split_at: str) -> list[str]:
+    if not delimiter:
+        return [s]
+    if split_at == "left":
+        return s.split(delimiter, 1)  # only the FIRST occurrence -- 2 parts max
+    if split_at == "right":
+        return s.rsplit(delimiter, 1)  # only the LAST occurrence -- 2 parts max
+    return s.split(delimiter)  # "each" -- every occurrence
+
+
+def parse_text(dfs: list[pd.DataFrame], params: dict[str, Any]) -> tuple[pd.DataFrame, list[str], list[str]]:
+    if not dfs:
+        raise ValueError("Text Parser needs a connected input table.")
+    df = dfs[0]
+    operations = params.get("operations") or []
+    if not operations:
+        return df, [], []  # nothing configured yet -- pass through unchanged
+
+    result = df.copy()
+    warnings: list[str] = []
+    existing_names = list(result.columns)
+
+    for op in operations:
+        column = op.get("column")
+        operation = op.get("operation")
+        op_params = op.get("params") or {}
+        base_name = (op.get("newColumnName") or "Extracted").strip() or "Extracted"
+        if column not in result.columns:
+            warnings.append(f"Text parsing operation skipped: column '{column}' not found.")
+            continue
+        source = result[column].astype(str)
+
+        if operation == "text_before":
+            values_by_col = [[_text_before(s, op_params.get("delimiter", ""), op_params.get("occurrence", "first")) for s in source]]
+            new_names = [base_name]
+        elif operation == "text_after":
+            values_by_col = [[_text_after(s, op_params.get("delimiter", ""), op_params.get("occurrence", "first")) for s in source]]
+            new_names = [base_name]
+        elif operation == "text_between":
+            values_by_col = [[
+                _text_between(
+                    s, op_params.get("startDelimiter", ""), op_params.get("endDelimiter", ""),
+                    op_params.get("startOccurrence", "first"), op_params.get("endOccurrence", "first"),
+                )
+                for s in source
+            ]]
+            new_names = [base_name]
+        elif operation == "first_chars":
+            try:
+                count = max(0, int(op_params.get("count", 0)))
+            except (TypeError, ValueError):
+                count = 0
+            values_by_col = [[s[:count] for s in source]]
+            new_names = [base_name]
+        elif operation == "last_chars":
+            try:
+                count = max(0, int(op_params.get("count", 0)))
+            except (TypeError, ValueError):
+                count = 0
+            values_by_col = [[(s[-count:] if count > 0 else "") for s in source]]
+            new_names = [base_name]
+        elif operation == "range":
+            try:
+                start = max(0, int(op_params.get("start", 0)))
+            except (TypeError, ValueError):
+                start = 0
+            try:
+                length = max(0, int(op_params.get("length", 0)))
+            except (TypeError, ValueError):
+                length = 0
+            values_by_col = [[s[start : start + length] for s in source]]
+            new_names = [base_name]
+        elif operation == "split_delimiter":
+            delimiter = op_params.get("delimiter", "")
+            split_at = op_params.get("splitAt", "each")
+            split_rows = [_split_values(s, delimiter, split_at) for s in source]
+            max_parts = max((len(r) for r in split_rows), default=1)
+            new_names = [base_name] if max_parts <= 1 else [f"{base_name}_{i + 1}" for i in range(max_parts)]
+            values_by_col = [[r[i] if i < len(r) else "" for r in split_rows] for i in range(max_parts)]
+        else:
+            raise ValueError(f"Unknown text parsing operation: {operation}")
+
+        unique_new_names = _make_unique_column_names(existing_names + new_names)[len(existing_names):]
+        for name, values in zip(unique_new_names, values_by_col):
+            result[name] = values
+        existing_names = existing_names + unique_new_names
+
+    # Every existing column keeps its exact name and value -- only the
+    # new extracted/split columns (untyped; they're freshly derived text)
+    # get added.
+    result.attrs["column_types"] = df.attrs.get("column_types") or {}
     return result, warnings, []
 
 
@@ -525,6 +965,7 @@ def deduplicate_rows(dfs: list[pd.DataFrame], params: dict[str, Any]) -> tuple[p
         raise ValueError(f"Unknown keep mode: {keep}")
     keep_param: "str | bool" = False if keep == "none" else keep
     result = df.drop_duplicates(subset=valid, keep=keep_param).copy()
+    result.attrs["column_types"] = df.attrs.get("column_types") or {}
     return result, warnings, []
 
 
@@ -557,6 +998,7 @@ def column_edit(dfs: list[pd.DataFrame], params: dict[str, Any]) -> tuple[pd.Dat
     warnings: list[str] = []
     names: list[str] = []
     series_list: list[list[Any]] = []
+    fields_used: list[str] = []
     for entry in columns:
         field = entry.get("field")
         if field not in df.columns:
@@ -564,12 +1006,17 @@ def column_edit(dfs: list[pd.DataFrame], params: dict[str, Any]) -> tuple[pd.Dat
             continue
         names.append(str(entry.get("name") or field))
         series_list.append(df[field].tolist())
+        fields_used.append(field)
 
     if not names:
         return df, warnings, []  # every referenced column was missing -- pass through
 
     unique_names = _make_unique_column_names(names)
     result = pd.DataFrame({unique_names[i]: series_list[i] for i in range(len(unique_names))})
+    orig_types = df.attrs.get("column_types") or {}
+    result.attrs["column_types"] = {
+        unique_names[i]: orig_types[fields_used[i]] for i in range(len(unique_names)) if fields_used[i] in orig_types
+    }
     return result, warnings, []
 
 
@@ -713,7 +1160,13 @@ def change_type(dfs: list[pd.DataFrame], params: dict[str, Any]) -> tuple[pd.Dat
     # columnTypeDetection.ts's resolveDisplayColumnType for how "number"
     # still resolves to an Integer-vs-Float icon from these now-trustworthy
     # (backend-formatted, not raw-extracted) values.
+    # Inherited types for whatever this run DIDN'T touch (a column not
+    # listed in `fields` at all, or listed as "text" -- to_text's own
+    # entries below still overwrite it, since re-running as Text is a
+    # deliberate reset) come first so this node's own freshly-applied
+    # conversions always win on conflict.
     result.attrs["column_types"] = {
+        **(df.attrs.get("column_types") or {}),
         **{c: "number" for c in to_number},
         **{c: "float" for c in to_float},
         **{c: "date" for c in to_date},
@@ -822,6 +1275,10 @@ def extract_regex(dfs: list[pd.DataFrame], params: dict[str, Any]) -> tuple[pd.D
     result = df.copy()
     for name, values in zip(unique_new_names, values_by_col):
         result[name] = values
+    # Every original column keeps its exact name and value -- only brand-
+    # new derived columns (untyped, since they're freshly computed text)
+    # get added alongside them.
+    result.attrs["column_types"] = df.attrs.get("column_types") or {}
     return result, [], []
 
 
@@ -853,6 +1310,10 @@ def cascade_fill(dfs: list[pd.DataFrame], params: dict[str, Any]) -> tuple[pd.Da
             result[col] = result[col].replace(custom_nulls, np.nan)
         result[col] = result[col].ffill() if direction == "down" else result[col].bfill()
         result[col] = result[col].fillna("")
+    # Filled cells copy an existing real value from elsewhere in the SAME
+    # column, and untouched columns are untouched -- nothing here recomputes
+    # a value into a different shape, so every column's type still holds.
+    result.attrs["column_types"] = df.attrs.get("column_types") or {}
     return result, [], []
 
 
@@ -1066,6 +1527,10 @@ def add_column(dfs: list[pd.DataFrame], params: dict[str, Any]) -> tuple[pd.Data
 
     result = df.copy()
     result[final_name] = [str(v) for v in values]
+    # Every existing column keeps its exact name and value -- only the new
+    # computed column (untyped; it's a fresh formula result, not something
+    # to guess a type for) gets added.
+    result.attrs["column_types"] = df.attrs.get("column_types") or {}
     return result, [], []
 
 
@@ -1146,6 +1611,7 @@ def conditional_column(dfs: list[pd.DataFrame], params: dict[str, Any]) -> tuple
 
     result = df.copy()
     result[final_name] = values.astype(str)
+    result.attrs["column_types"] = df.attrs.get("column_types") or {}
     return result, warnings, []
 
 
@@ -1318,6 +1784,7 @@ NODE_TRANSFORMS: dict[str, Callable[[list[pd.DataFrame], dict[str, Any]], tuple[
     "merge_data": merge_data,
     "shift_columns": shift_columns,
     "clean_columns": clean_columns,
+    "parse_text": parse_text,
     "deduplicate_rows": deduplicate_rows,
     "column_edit": column_edit,
     "change_type": change_type,
@@ -1329,4 +1796,8 @@ NODE_TRANSFORMS: dict[str, Callable[[list[pd.DataFrame], dict[str, Any]], tuple[
     "add_column": add_column,
     "conditional_column": conditional_column,
     "concatenate": concatenate,
+    "bridge": bridge,
+    "file_input": file_input,
+    "sort_rows": sort_rows,
+    "aggregate_columns": aggregate_columns,
 }

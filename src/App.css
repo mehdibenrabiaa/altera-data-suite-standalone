@@ -1066,7 +1066,8 @@ button:focus-visible {
 .change-type-window .match-toggle,
 .regex-window .match-toggle,
 .cascade-fill-window .match-toggle,
-.export-window .match-toggle {
+.export-window .match-toggle,
+.cleaner-window .match-toggle {
   display: inline-flex;
   border: 1px solid #e0e0e0;
   overflow: hidden;
@@ -1078,7 +1079,8 @@ button:focus-visible {
 .change-type-window .match-toggle-btn,
 .regex-window .match-toggle-btn,
 .cascade-fill-window .match-toggle-btn,
-.export-window .match-toggle-btn {
+.export-window .match-toggle-btn,
+.cleaner-window .match-toggle-btn {
   height: 22px;
   padding: 0 10px;
   font-size: 11px;
@@ -1097,7 +1099,8 @@ button:focus-visible {
 .change-type-window .match-toggle-btn.active,
 .regex-window .match-toggle-btn.active,
 .cascade-fill-window .match-toggle-btn.active,
-.export-window .match-toggle-btn.active { background: #FE4D41; color: #fff; }
+.export-window .match-toggle-btn.active,
+.cleaner-window .match-toggle-btn.active { background: #FE4D41; color: #fff; }
 .filter-builder-window .match-toggle-btn:not(.active):hover,
 .merge-window .match-toggle-btn:not(.active):hover,
 .shift-columns-window .match-toggle-btn:not(.active):hover,
@@ -1105,7 +1108,8 @@ button:focus-visible {
 .change-type-window .match-toggle-btn:not(.active):hover,
 .regex-window .match-toggle-btn:not(.active):hover,
 .cascade-fill-window .match-toggle-btn:not(.active):hover,
-.export-window .match-toggle-btn:not(.active):hover { background: #f0f0f0; color: #1a1a1a; }
+.export-window .match-toggle-btn:not(.active):hover,
+.cleaner-window .match-toggle-btn:not(.active):hover { background: #f0f0f0; color: #1a1a1a; }
 
 /* Filter rows */
 .filter-builder-window .filter-rows { display: flex; flex-direction: column; gap: 6px; }
@@ -1203,7 +1207,8 @@ button:focus-visible {
 .export-window .filter-empty-state,
 .unpivot-columns-window .filter-empty-state,
 .pivot-columns-window .filter-empty-state,
-.add-column-window .filter-empty-state {
+.add-column-window .filter-empty-state,
+.summary-window .filter-empty-state {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -1230,7 +1235,8 @@ button:focus-visible {
 .export-window .filter-empty-state h3,
 .unpivot-columns-window .filter-empty-state h3,
 .pivot-columns-window .filter-empty-state h3,
-.add-column-window .filter-empty-state h3 { margin: 0; font-size: 14px; font-weight: 600; color: #1a1a1a; }
+.add-column-window .filter-empty-state h3,
+.summary-window .filter-empty-state h3 { margin: 0; font-size: 14px; font-weight: 600; color: #1a1a1a; }
 .filter-builder-window .filter-empty-state p,
 .header-promoter-window .filter-empty-state p,
 .browse-window .filter-empty-state p,
@@ -1245,7 +1251,8 @@ button:focus-visible {
 .export-window .filter-empty-state p,
 .unpivot-columns-window .filter-empty-state p,
 .pivot-columns-window .filter-empty-state p,
-.add-column-window .filter-empty-state p { margin: 0; font-size: 13px; color: #555; }
+.add-column-window .filter-empty-state p,
+.summary-window .filter-empty-state p { margin: 0; font-size: 13px; color: #555; }
 
 /* Apply/Cancel footer -- this app's own addition, not part of the ported
    original (see the top-of-file comment on why). Reused as-is by Header
@@ -1693,6 +1700,19 @@ button:focus-visible {
   width: 88px;
   flex-shrink: 0;
 }
+/* Text Parser (TextParserWindow.tsx) reuses .cleaner-window wholesale
+   (same trick as Add Column reusing .filter-builder-window) -- its own
+   operation cards are built from the exact same .cleaner-op-* classes
+   above, just with a single-column picker instead of Cleaner's
+   multi-select. This is the one addition: several .cleaner-param-row
+   entries (an operation like Text Between Delimiters has 4 params)
+   stacked in the SAME grid cell need their own vertical gap between them. */
+.textparser-param-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 .cleaner-checkbox-row {
   display: flex;
   align-items: center;
@@ -2264,6 +2284,44 @@ button:focus-visible {
   flex-shrink: 0;
 }
 .change-type-hint { margin: 0; font-size: 12px; color: #999; line-height: 1.5; }
+
+/* Formula box's syntax reference (AddColumnWindow.tsx) -- replaces a
+   single dense sentence (column syntax + every operator + all 12
+   function names + keyboard hints, all run together) with short labeled
+   rows and small chips, so the growing function list stays scannable
+   instead of turning into a wall of text every time a new one's added. */
+.formula-syntax-help {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.formula-syntax-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.formula-syntax-label {
+  flex-shrink: 0;
+  width: 62px;
+  font-size: 11px;
+  color: #999;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.formula-syntax-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.formula-syntax-chip {
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 11px;
+  color: #555;
+  background: #f0f0f0;
+  border: 1px solid #e0e0e0;
+  padding: 1px 6px;
+  white-space: nowrap;
+}
 
 /* Regular Expressions window -- same sidebar + AG-Grid shell as Header
    Promoter's own window (.hp-body/.hp-controls-body/.hp-grid-wrap), the
@@ -4727,6 +4785,178 @@ body.dock-dragging .dock-style-canvas-dock-panel {
   border-radius: 50%; animation: smart-spin 0.6s linear infinite;
 }
 @keyframes smart-spin { to { transform: rotate(360deg); } }
+
+/* Summary window (SummaryWindow.tsx) -- same flat outer shell as every
+   other Configure/viewer window, plus its own per-column stat-card
+   layout. Scrolls as one column (table-level header, then one card per
+   column) rather than Browse's grid, since a stat card's own content
+   (histogram, gap list) doesn't fit a fixed-height grid row the way a
+   plain cell value does. */
+.summary-window {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  box-sizing: border-box;
+  background: #f5f5f5;
+  font-family: "Google Sans Flex", sans-serif;
+  font-size: 13px;
+  color: #1a1a1a;
+  overflow-y: auto;
+}
+.summary-table-header {
+  display: flex;
+  gap: 24px;
+  padding: 16px 20px;
+  background: #ffffff;
+  border-bottom: 1px solid #e0e0e0;
+  flex-shrink: 0;
+}
+.summary-table-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.summary-table-stat > span:last-child {
+  font-size: 18px;
+  font-weight: 600;
+}
+.summary-mini-label {
+  font-size: 11px;
+  color: #999;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.summary-warn-value {
+  color: #d4380d;
+}
+.summary-col-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+}
+.summary-col-card {
+  background: #ffffff;
+  border: 1px solid #e0e0e0;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.summary-col-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.summary-col-name {
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.summary-col-type-badge {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 2px 7px;
+  color: #555;
+  background: #f0f0f0;
+  border: 1px solid #e0e0e0;
+}
+.summary-col-type-badge.numeric {
+  color: #155F98;
+  background: #eaf2fa;
+  border-color: #c9dcef;
+}
+.summary-stat-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.summary-stat-label {
+  flex-shrink: 0;
+  width: 56px;
+  font-size: 11px;
+  color: #999;
+}
+.summary-stat-value {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: #555;
+  min-width: 64px;
+  text-align: right;
+}
+.summary-stat-value-only {
+  text-align: left;
+}
+.summary-bar-track {
+  flex: 1;
+  height: 6px;
+  background: #f0f0f0;
+}
+.summary-bar-fill {
+  height: 100%;
+}
+.summary-numeric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+.summary-numeric-grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+}
+.summary-histogram {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 44px;
+  padding-top: 4px;
+}
+.summary-histogram-bar-wrap {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+}
+.summary-histogram-bar {
+  width: 100%;
+  min-height: 2px;
+  background: #155F98;
+}
+.summary-gap-line {
+  font-size: 11px;
+  color: #555;
+  line-height: 1.5;
+}
+.summary-gap-line.has-gaps {
+  color: #d4380d;
+}
+.summary-top-values {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.summary-top-value-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.summary-top-value-label {
+  flex-shrink: 0;
+  width: 100px;
+  font-size: 11px;
+  color: #1a1a1a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 /* .activation-spin-icon (ActivationTab.tsx's "Checking license…" loader)
    reuses smart-spin above -- its actual animation rule lives near

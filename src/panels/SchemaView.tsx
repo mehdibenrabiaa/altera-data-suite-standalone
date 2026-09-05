@@ -30,7 +30,7 @@ import { Spin } from "antd";
 import { LoadingOutlined } from "@ant-design/icons";
 import { AgGridReact } from "ag-grid-react";
 import { ModuleRegistry, AllCommunityModule, themeQuartz, type ColDef } from "ag-grid-community";
-import type { Rectangle, Group, SchemaPreviewTable, ProcessorNodeInstance, FilterBuilderParams, FilterColumnDefinition, HeaderPromoterParams, MergeParams, ShiftColumnsParams, CleanerParams, UniqueParams, ColumnEditParams, ChangeTypeParams, RegexParams, CascadeFillParams, ExportParams, UnpivotColumnsParams, PivotColumnsParams, AddColumnParams, ConditionalColumnParams, NodeLogEntry } from "../types";
+import type { Rectangle, Group, SchemaPreviewTable, ProcessorNodeInstance, FilterBuilderParams, FilterColumnDefinition, HeaderPromoterParams, MergeParams, ShiftColumnsParams, CleanerParams, UniqueParams, ColumnEditParams, ChangeTypeParams, RegexParams, CascadeFillParams, ExportParams, UnpivotColumnsParams, PivotColumnsParams, AddColumnParams, ConditionalColumnParams, TextParserParams, InputDataParams, SortParams, AggregateParams, NodeLogEntry } from "../types";
 import { computeDefaultMatchPair } from "../mergeDefaults";
 import {
   NODE_DRAG_MIME,
@@ -49,7 +49,7 @@ import { TypedColumnHeader } from "../columnTypeIcons";
 // (backend/app/nodes.py's NODE_TRANSFORMS registry) -- gates the "Run"
 // context-menu item so it only appears on nodes that can really execute.
 // Extend both maps together as more real nodes come online.
-const RUNNABLE_NODE_KINDS = new Set(["Horizontal Stack", "Filter", "Header Promoter", "Index Column", "Merge", "Shift Columns", "Cleaner", "Unique", "Column Edit", "Change Type", "Regular Expressions", "Cascade Fill", "Export", "Unpivot Columns", "Pivot Columns", "Formula", "Add Column", "Concatenate"]);
+const RUNNABLE_NODE_KINDS = new Set(["Horizontal Stack", "Filter", "Header Promoter", "Index Column", "Merge", "Shift Columns", "Cleaner", "Unique", "Column Edit", "Change Type", "Regular Expressions", "Text Parser", "Cascade Fill", "Export", "Unpivot Columns", "Pivot Columns", "Formula", "Add Column", "Bridge", "Concatenate", "Input Data", "Sort", "Aggregate"]);
 const NODE_KIND_SLUGS: Record<string, string> = {
   "Horizontal Stack": "horizontal_stack",
   "Filter": "filter_builder",
@@ -62,13 +62,18 @@ const NODE_KIND_SLUGS: Record<string, string> = {
   "Column Edit": "column_edit",
   "Change Type": "change_type",
   "Regular Expressions": "extract_regex",
+  "Text Parser": "parse_text",
   "Cascade Fill": "cascade_fill",
   "Export": "export_data",
   "Unpivot Columns": "unpivot_columns",
   "Pivot Columns": "pivot_columns",
   "Formula": "add_column",
   "Add Column": "conditional_column",
+  "Bridge": "bridge",
   "Concatenate": "concatenate",
+  "Input Data": "file_input",
+  "Sort": "sort_rows",
+  "Aggregate": "aggregate_columns",
 };
 // Minimum resolved (primary) inputs a kind needs before it's worth
 // running -- Horizontal Stack needs 2+ tables to combine, Filter Builder
@@ -81,7 +86,11 @@ const NODE_KIND_SLUGS: Record<string, string> = {
 // the backend (merge_data raises if fewer than 2 tables arrive). Shift
 // Columns, Cleaner, Unique, Column Edit, Change Type, and Regular
 // Expressions likewise only ever transform a single table.
-const NODE_MIN_INPUTS: Record<string, number> = { "Horizontal Stack": 2, "Filter": 1, "Header Promoter": 1, "Index Column": 1, "Merge": 1, "Shift Columns": 1, "Cleaner": 1, "Unique": 1, "Column Edit": 1, "Change Type": 1, "Regular Expressions": 1, "Concatenate": 2 };
+// Input Data is the one entry here that's 0, not >= 1 -- the catalog's
+// only graph source, so it never has (or needs) an upstream table at all;
+// see handleRunProcessorNode/the auto-run effect below, both of which
+// read this same map for their own "not enough inputs yet" bail-out.
+const NODE_MIN_INPUTS: Record<string, number> = { "Horizontal Stack": 2, "Filter": 1, "Header Promoter": 1, "Index Column": 1, "Merge": 1, "Shift Columns": 1, "Cleaner": 1, "Unique": 1, "Column Edit": 1, "Change Type": 1, "Regular Expressions": 1, "Concatenate": 2, "Input Data": 0 };
 
 // Catalog widget names with their own dedicated window -- every node here
 // gets a real separate BrowserWindow (see FilterBuilderWindow.tsx/
@@ -96,6 +105,7 @@ const NODE_MIN_INPUTS: Record<string, number> = { "Horizontal Stack": 2, "Filter
 const NODE_WINDOW_LABEL: Record<string, string> = {
   "Filter": "Configure…",
   "Browse": "Browse Data…",
+  "Summary": "View Summary…",
   "Header Promoter": "Configure…",
   "Merge": "Configure…",
   "Shift Columns": "Configure…",
@@ -104,12 +114,16 @@ const NODE_WINDOW_LABEL: Record<string, string> = {
   "Column Edit": "Configure…",
   "Change Type": "Configure…",
   "Regular Expressions": "Configure…",
+  "Text Parser": "Configure…",
   "Cascade Fill": "Configure…",
   "Export": "Configure…",
   "Unpivot Columns": "Configure…",
   "Pivot Columns": "Configure…",
   "Formula": "Configure…",
   "Add Column": "Configure…",
+  "Input Data": "Configure…",
+  "Sort": "Configure…",
+  "Aggregate": "Configure…",
 };
 const NODE_KINDS_WITH_WINDOW = new Set(Object.keys(NODE_WINDOW_LABEL));
 
@@ -503,6 +517,7 @@ interface ProcessorNodeData {
   color: string;
   hasOutput?: boolean;
   hasExtraInput?: boolean;
+  hasInput?: boolean;
   description?: string;
   [key: string]: unknown;
 }
@@ -664,7 +679,9 @@ function ProcessorNode({ id, data }: NodeProps<Node<ProcessorNodeData>>) {
       }}
     >
       <div className="schema-processor-node-core node-port-anchor">
-        <Handle type="target" position={Position.Left} className="node-port-triangle node-port-triangle-in" />
+        {data.hasInput !== false && (
+          <Handle type="target" position={Position.Left} className="node-port-triangle node-port-triangle-in" />
+        )}
         {/* A second, square-shaped input -- visually distinct from the
             regular arrow so it doesn't read as "just another data input":
             it's Filter Builder's "Extra Data" port, used for the
@@ -1397,7 +1414,7 @@ export default function SchemaView({
           type: "processorNode",
           position,
           selected: keepProcessorSelection ? prev?.selected : false,
-          data: { name: p.name || p.catalogName, catalogName: p.catalogName, icon: p.icon, color: p.color, hasOutput: p.hasOutput, hasExtraInput: p.hasExtraInput, description: p.description, processorId: p.id },
+          data: { name: p.name || p.catalogName, catalogName: p.catalogName, icon: p.icon, color: p.color, hasOutput: p.hasOutput, hasExtraInput: p.hasExtraInput, hasInput: p.hasInput, description: p.description, processorId: p.id },
         } as Node;
       });
 
@@ -1786,6 +1803,62 @@ export default function SchemaView({
     [nodeCtxMenu, processorNodes],
   );
 
+  // ── Multi-select right-click menu: Run / Delete N nodes ─────────────────
+  // Once 2+ nodes are selected, xyflow renders its own invisible
+  // `.react-flow__nodesselection-rect` drag-handle overlay on top of the
+  // whole selection's bounding box (so the group can be dragged as one
+  // unit) -- that overlay sits above the actual node elements and
+  // swallows a right-click before it ever reaches onNodeContextMenu above,
+  // which is why nothing appeared to happen. xyflow's own
+  // onSelectionContextMenu is the dedicated prop for exactly this case;
+  // it hands back every currently-selected node (not just processor
+  // nodes -- table cards/group boxes get folded in from a marquee just as
+  // easily), so this filters down to processorNode ids the same way
+  // onNodesDelete above already does, since those are the only ones this
+  // menu's actions (Run/Delete) apply to. No per-node Rename/Configure
+  // here -- those only make sense for exactly one node, which single-node
+  // onNodeContextMenu already covers.
+  const [selectionCtxMenu, setSelectionCtxMenu] = useState<{ x: number; y: number; nodeIds: string[] } | null>(null);
+  const closeSelectionCtxMenu = useCallback(() => setSelectionCtxMenu(null), []);
+  const onSelectionContextMenu = useCallback((event: React.MouseEvent, selected: Node[]) => {
+    event.preventDefault();
+    const nodeIds = selected.filter((n) => n.type === "processorNode").map((n) => n.id);
+    if (nodeIds.length === 0) return;
+    const wrapperRect = wrapperRef.current?.getBoundingClientRect();
+    if (!wrapperRect) return;
+    setSelectionCtxMenu({ x: event.clientX - wrapperRect.left, y: event.clientY - wrapperRect.top, nodeIds });
+  }, []);
+
+  // Same close-on-Escape/outside-click pattern as the single-node menu
+  // above.
+  useEffect(() => {
+    if (!selectionCtxMenu) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeSelectionCtxMenu();
+    };
+    const handleClickOutside = () => closeSelectionCtxMenu();
+    window.addEventListener("keydown", handleKeyDown);
+    const id = window.setTimeout(() => window.addEventListener("mousedown", handleClickOutside), 0);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("mousedown", handleClickOutside);
+      window.clearTimeout(id);
+    };
+  }, [selectionCtxMenu, closeSelectionCtxMenu]);
+
+  const selectionCtxMenuRunnableIds = useMemo(() => {
+    if (!selectionCtxMenu) return [];
+    return selectionCtxMenu.nodeIds.filter((id) => {
+      const proc = processorNodes.find((p) => p.id === id);
+      return proc && RUNNABLE_NODE_KINDS.has(proc.catalogName);
+    });
+  }, [selectionCtxMenu, processorNodes]);
+
+  const handleDeleteSelection = useCallback(() => {
+    if (selectionCtxMenu) onDeleteProcessorNodes(selectionCtxMenu.nodeIds);
+    closeSelectionCtxMenu();
+  }, [selectionCtxMenu, onDeleteProcessorNodes, closeSelectionCtxMenu]);
+
   // Drives ProcessorNode's own inline editor via ProcessorNodeEditContext --
   // see that context's definition for why this isn't routed through `data`.
   const [editingProcessorId, setEditingProcessorId] = useState<string | null>(null);
@@ -2157,6 +2230,75 @@ export default function SchemaView({
   }, [processorNodes, resolveNodeInputs, closeNodeCtxMenu]);
 
   // Opens (or focuses/reseeds) the node's Configure window -- same real-
+  // window, snapshot-on-open pattern as Cleaner above.
+  const handleOpenTextParser = useCallback((id: string) => {
+    const proc = processorNodes.find((p) => p.id === id);
+    if (!proc) return;
+    const primary = resolveNodeInputs(id)[0];
+    window.alteraStudio.openTextParserWindow({
+      nodeId: id,
+      nodeName: proc.name || proc.catalogName,
+      columns: primary?.columns ?? [],
+      initialParams: (proc.params as TextParserParams | undefined) ?? {
+        operations: [{ id: "op_0", column: primary?.columns[0] ?? "", operation: "text_before", params: {}, newColumnName: "Extracted" }],
+      },
+    });
+    closeNodeCtxMenu();
+  }, [processorNodes, resolveNodeInputs, closeNodeCtxMenu]);
+
+  // Opens (or focuses/reseeds) the node's Configure window -- same real-
+  // window, snapshot-on-open pattern as Cleaner/Text Parser above, minus
+  // the resolveNodeInputs() call every other one of these makes: Input
+  // Data has no upstream table to resolve at all, its own Configure window
+  // is the only place its data ever comes from.
+  const handleOpenInputData = useCallback((id: string) => {
+    const proc = processorNodes.find((p) => p.id === id);
+    if (!proc) return;
+    window.alteraStudio.openInputDataWindow({
+      nodeId: id,
+      nodeName: proc.name || proc.catalogName,
+      initialParams: (proc.params as InputDataParams | undefined) ?? {},
+    });
+    closeNodeCtxMenu();
+  }, [processorNodes, closeNodeCtxMenu]);
+
+  // Opens (or focuses/reseeds) the node's Configure window -- same real-
+  // window, snapshot-on-open pattern as Text Parser above. A brand-new
+  // node starts with one empty sort level already in place (same
+  // reasoning as Cleaner/Text Parser's own default operation).
+  const handleOpenSort = useCallback((id: string) => {
+    const proc = processorNodes.find((p) => p.id === id);
+    if (!proc) return;
+    const primary = resolveNodeInputs(id)[0];
+    window.alteraStudio.openSortWindow({
+      nodeId: id,
+      nodeName: proc.name || proc.catalogName,
+      columns: primary?.columns ?? [],
+      initialParams: (proc.params as SortParams | undefined) ?? {
+        keys: [{ id: "key_0", column: primary?.columns[0] ?? "", direction: "asc" }],
+      },
+    });
+    closeNodeCtxMenu();
+  }, [processorNodes, resolveNodeInputs, closeNodeCtxMenu]);
+
+  // Opens (or focuses/reseeds) the node's Configure window -- same real-
+  // window, snapshot-on-open pattern as Sort above.
+  const handleOpenAggregate = useCallback((id: string) => {
+    const proc = processorNodes.find((p) => p.id === id);
+    if (!proc) return;
+    const primary = resolveNodeInputs(id)[0];
+    window.alteraStudio.openAggregateWindow({
+      nodeId: id,
+      nodeName: proc.name || proc.catalogName,
+      columns: primary?.columns ?? [],
+      initialParams: (proc.params as AggregateParams | undefined) ?? {
+        metrics: [{ id: "metric_0", column: primary?.columns[0] ?? "", aggregation: "sum" }],
+      },
+    });
+    closeNodeCtxMenu();
+  }, [processorNodes, resolveNodeInputs, closeNodeCtxMenu]);
+
+  // Opens (or focuses/reseeds) the node's Configure window -- same real-
   // window, snapshot-on-open pattern as the others above. Unlike Shift
   // Columns/Cleaner, this one also needs the primary input's ROWS (not
   // just column names) so the live Total/Duplicates/Output stat readout
@@ -2314,7 +2456,19 @@ export default function SchemaView({
     window.alteraStudio.openConditionalColumnWindow({
       nodeId: id,
       nodeName: proc.name || proc.catalogName,
-      initialParams: (proc.params as ConditionalColumnParams | undefined) ?? { columnName: "", clauses: [], elseValue: "" },
+      // A brand-new node (never configured/applied yet, so proc.params is
+      // still undefined) starts with one empty clause already in place --
+      // same reasoning as Filter Builder's own initialParams just above:
+      // without this, every new Add Column opened for the first time
+      // needed an extra "+ Add Clause" click before a condition could
+      // even be added. ConditionalColumnWindow.tsx renumbers clause/group
+      // ids on load regardless (see its own loadPayload), so the ids here
+      // are just placeholders.
+      initialParams: (proc.params as ConditionalColumnParams | undefined) ?? {
+        columnName: "",
+        clauses: [{ id: "clause_0", group: { id: "clausegroup_0", match: "all", conditions: [] }, outputValue: "" }],
+        elseValue: "",
+      },
       inputColumns,
     });
     closeNodeCtxMenu();
@@ -2393,6 +2547,42 @@ export default function SchemaView({
     });
   }, [processorNodes, resolveBrowseInput]);
 
+  // Summary -- same pure-viewer pattern as Browse immediately above
+  // (resolveBrowseInput's own "requires a real Convert? no, sample-
+  // preview fallback is fine" reasoning applies just as well to a stats
+  // view as to a raw grid), including the identical live-refresh-while-
+  // open behavior.
+  const openSummaryNodeIdsRef = useRef<Set<string>>(new Set());
+  const handleOpenSummary = useCallback((id: string) => {
+    const proc = processorNodes.find((p) => p.id === id);
+    if (!proc) return;
+    const input = resolveBrowseInput(id);
+    window.alteraStudio.openSummaryWindow({
+      nodeId: id,
+      nodeName: proc.name || proc.catalogName,
+      columns: input?.columns ?? [],
+      rows: input?.rows ?? [],
+      columnTypes: input?.columnTypes,
+    });
+    openSummaryNodeIdsRef.current.add(id);
+    closeNodeCtxMenu();
+  }, [processorNodes, resolveBrowseInput, closeNodeCtxMenu]);
+
+  const lastPushedSummaryInputRef = useRef<Map<string, { columns: string[]; rows: string[][] }>>(new Map());
+  useEffect(() => {
+    openSummaryNodeIdsRef.current.forEach((id) => {
+      const proc = processorNodes.find((p) => p.id === id);
+      if (!proc || proc.catalogName !== "Summary") return;
+      const input = resolveBrowseInput(id);
+      const columns = input?.columns ?? [];
+      const rows = input?.rows ?? [];
+      const last = lastPushedSummaryInputRef.current.get(id);
+      if (last && last.columns === columns && last.rows === rows) return;
+      lastPushedSummaryInputRef.current.set(id, { columns, rows });
+      window.alteraStudio.pushSummaryUpdate({ nodeId: id, nodeName: proc.name || proc.catalogName, columns, rows, columnTypes: input?.columnTypes });
+    });
+  }, [processorNodes, resolveBrowseInput]);
+
   // Single entry point for "open this node's window" (the icon double-
   // click and the context-menu item both go through this), dispatching to
   // whichever specific opener the node's catalog kind actually needs --
@@ -2416,6 +2606,7 @@ export default function SchemaView({
     ]);
     const proc = processorNodes.find((p) => p.id === id);
     if (proc?.catalogName === "Browse") handleOpenBrowse(id);
+    else if (proc?.catalogName === "Summary") handleOpenSummary(id);
     else if (proc?.catalogName === "Header Promoter") handleOpenHeaderPromoter(id);
     else if (proc?.catalogName === "Merge") handleOpenMerge(id);
     else if (proc?.catalogName === "Shift Columns") handleOpenShiftColumns(id);
@@ -2424,14 +2615,18 @@ export default function SchemaView({
     else if (proc?.catalogName === "Column Edit") handleOpenColumnEdit(id);
     else if (proc?.catalogName === "Change Type") handleOpenChangeType(id);
     else if (proc?.catalogName === "Regular Expressions") handleOpenRegex(id);
+    else if (proc?.catalogName === "Text Parser") handleOpenTextParser(id);
     else if (proc?.catalogName === "Cascade Fill") handleOpenCascadeFill(id);
     else if (proc?.catalogName === "Export") handleOpenExport(id);
     else if (proc?.catalogName === "Unpivot Columns") handleOpenUnpivotColumns(id);
     else if (proc?.catalogName === "Pivot Columns") handleOpenPivotColumns(id);
     else if (proc?.catalogName === "Formula") handleOpenAddColumn(id);
     else if (proc?.catalogName === "Add Column") handleOpenConditionalColumn(id);
+    else if (proc?.catalogName === "Input Data") handleOpenInputData(id);
+    else if (proc?.catalogName === "Sort") handleOpenSort(id);
+    else if (proc?.catalogName === "Aggregate") handleOpenAggregate(id);
     else handleOpenFilterBuilder(id);
-  }, [processorNodes, handleOpenBrowse, handleOpenHeaderPromoter, handleOpenMerge, handleOpenShiftColumns, handleOpenCleaner, handleOpenUnique, handleOpenColumnEdit, handleOpenChangeType, handleOpenRegex, handleOpenCascadeFill, handleOpenExport, handleOpenUnpivotColumns, handleOpenPivotColumns, handleOpenAddColumn, handleOpenConditionalColumn, handleOpenFilterBuilder, onNodesChange]);
+  }, [processorNodes, handleOpenBrowse, handleOpenSummary, handleOpenHeaderPromoter, handleOpenMerge, handleOpenShiftColumns, handleOpenCleaner, handleOpenUnique, handleOpenColumnEdit, handleOpenChangeType, handleOpenRegex, handleOpenTextParser, handleOpenCascadeFill, handleOpenExport, handleOpenUnpivotColumns, handleOpenPivotColumns, handleOpenAddColumn, handleOpenConditionalColumn, handleOpenInputData, handleOpenSort, handleOpenAggregate, handleOpenFilterBuilder, onNodesChange]);
 
   // `select`: only true for a user-initiated single-node run (the context
   // menu's "Run"), which is the one case selecting the node to show its
@@ -2598,6 +2793,17 @@ export default function SchemaView({
     }
     drainRunQueue();
   }, [drainRunQueue]);
+
+  // Multi-select context menu's own "Run" action -- see
+  // selectionCtxMenuRunnableIds/onSelectionContextMenu above for why this
+  // lives separately from the single-node menu's own Run item. Declared
+  // here (not alongside the rest of that menu's state/handlers) since it
+  // needs enqueueRun, which isn't defined until this point in the
+  // component.
+  const handleRunSelection = useCallback(() => {
+    for (const id of selectionCtxMenuRunnableIds) enqueueRun(id);
+    closeSelectionCtxMenu();
+  }, [selectionCtxMenuRunnableIds, enqueueRun, closeSelectionCtxMenu]);
 
   // ── Auto-run ───────────────────────────────────────────────────────────
   // A runnable node runs automatically whenever its resolved inputs
@@ -2791,22 +2997,30 @@ export default function SchemaView({
     };
   }, [pickerOpen, closeNodePicker]);
 
-  const pickerResults = useMemo(() => {
+  const pickerFilteredNodes = useMemo(() => {
     const q = pickerQuery.trim().toLowerCase();
-    const filtered = q ? NODE_CATALOG.filter((n) => n.name.toLowerCase().includes(q)) : NODE_CATALOG;
-    return CATEGORY_ORDER.map((key) => ({
+    return q ? NODE_CATALOG.filter((n) => n.name.toLowerCase().includes(q)) : NODE_CATALOG;
+  }, [pickerQuery]);
+  const pickerResults = useMemo(() => (
+    CATEGORY_ORDER.map((key) => ({
       key,
       meta: CATEGORY_META[key],
-      items: filtered.filter((n) => n.category === key),
-    })).filter((g) => g.items.length > 0);
-  }, [pickerQuery]);
+      items: pickerFilteredNodes.filter((n) => n.category === key),
+    })).filter((g) => g.items.length > 0)
+  ), [pickerFilteredNodes]);
 
   const handlePickNode = useCallback(
     (entry: DraggedNodeEntry) => {
       const newId = onAddProcessorNode(entry, pickerFlowPos);
       const pending = pendingConnectionSourceRef.current;
       pendingConnectionSourceRef.current = null;
-      if (pending) {
+      // A pending connection (dragged off some other node's output handle
+      // onto empty canvas, see the frozen dashed-line preview) has nowhere
+      // to land on a node with no input port at all (hasInput: false --
+      // currently just Input Data, the catalog's one graph source) --
+      // wiring it anyway would create an edge pointing at a target handle
+      // that was never actually rendered.
+      if (pending && entry.hasInput !== false) {
         onConnect({ source: pending.nodeId, sourceHandle: pending.handleId, target: newId, targetHandle: null });
       }
       closeNodePicker();
@@ -3339,6 +3553,7 @@ export default function SchemaView({
         onNodesDelete={onNodesDelete}
         onPaneContextMenu={onPaneContextMenu}
         onNodeContextMenu={onNodeContextMenu}
+        onSelectionContextMenu={onSelectionContextMenu}
         onSelectionStart={handleSelectionStart}
         onSelectionEnd={handleSelectionEnd}
         onInit={(instance) => { reactFlowInstanceRef.current = instance; tryFitView(); }}
@@ -3436,6 +3651,25 @@ export default function SchemaView({
           </div>
         </div>
       )}
+      {selectionCtxMenu && (
+        <div
+          className="rect-ctx-menu"
+          style={{ left: selectionCtxMenu.x, top: selectionCtxMenu.y }}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          {selectionCtxMenuRunnableIds.length > 0 && (
+            <>
+              <div className="ctx-menu-item" onClick={handleRunSelection}>
+                <span>Run {selectionCtxMenuRunnableIds.length} node{selectionCtxMenuRunnableIds.length === 1 ? "" : "s"}</span>
+              </div>
+              <div className="ctx-menu-divider" />
+            </>
+          )}
+          <div className="ctx-menu-item" onClick={handleDeleteSelection}>
+            <span>Delete {selectionCtxMenu.nodeIds.length} node{selectionCtxMenu.nodeIds.length === 1 ? "" : "s"}</span>
+          </div>
+        </div>
+      )}
       {pickerOpen && (
         <div
           className="schema-node-picker nodrag nowheel"
@@ -3450,6 +3684,12 @@ export default function SchemaView({
             onChange={(e) => setPickerQuery(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Escape") closeNodePicker();
+              // Typing narrows the search down to exactly one node -- hitting
+              // Enter picks it, same as clicking it, so a query specific
+              // enough to leave a single match doesn't also need a mouse.
+              else if (e.key === "Enter" && pickerFilteredNodes.length === 1) {
+                handlePickNode(toDraggedNodeEntry(pickerFilteredNodes[0]));
+              }
             }}
           />
           <div className="schema-node-picker-list">

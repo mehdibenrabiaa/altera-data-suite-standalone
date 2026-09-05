@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 
-import type { SettingsPayload, PersistedSettings, FilterBuilderParams, FilterColumnDefinition, HeaderPromoterParams, MergeParams, ShiftColumnsParams, CleanerParams, UniqueParams, ColumnEditParams, ChangeTypeParams, RegexParams, CascadeFillParams, ExportParams, UnpivotColumnsParams, PivotColumnsParams, AddColumnParams, ConditionalColumnParams } from "./types";
+import type { SettingsPayload, PersistedSettings, FilterBuilderParams, FilterColumnDefinition, HeaderPromoterParams, MergeParams, ShiftColumnsParams, CleanerParams, UniqueParams, ColumnEditParams, ChangeTypeParams, RegexParams, CascadeFillParams, ExportParams, UnpivotColumnsParams, PivotColumnsParams, AddColumnParams, ConditionalColumnParams, TextParserParams, InputDataParams, SortParams, AggregateParams } from "./types";
 import type { AppliedColumnType } from "./columnTypeDetection";
 
 // Mirrors the original devkit/filter-builder project's own ExtraColumnDef
@@ -33,6 +33,16 @@ export interface BrowseWindowPayload {
   // Only ever present when this window's input is the direct output of a
   // Change Type node -- see columnTypeDetection.ts's resolveDisplayColumnType
   // for why the header icon reads this instead of re-guessing from content.
+  columnTypes?: Record<string, AppliedColumnType>;
+}
+
+// Same shape as Browse's own payload (same pure-viewer pattern) -- Summary
+// just renders stats from these rows instead of the raw grid.
+export interface SummaryWindowPayload {
+  nodeId: string;
+  nodeName: string;
+  columns: string[];
+  rows: string[][];
   columnTypes?: Record<string, AppliedColumnType>;
 }
 
@@ -94,6 +104,57 @@ export interface CleanerWindowPayload {
 export interface CleanerAppliedPayload {
   nodeId: string;
   params: CleanerParams;
+}
+
+// Same real-window, round-trips-on-Apply shape as Cleaner just above.
+export interface TextParserWindowPayload {
+  nodeId: string;
+  nodeName: string;
+  columns: string[];
+  initialParams: TextParserParams;
+}
+export interface TextParserAppliedPayload {
+  nodeId: string;
+  params: TextParserParams;
+}
+
+// Input Data's own Configure window is unlike every other one above --
+// there's no upstream table to resolve (it's the catalog's only graph
+// SOURCE node), so this payload carries no columns/rows at all, just
+// whatever file/sheet is already chosen (if any) for the window to show on
+// open.
+export interface InputDataWindowPayload {
+  nodeId: string;
+  nodeName: string;
+  initialParams: InputDataParams;
+}
+export interface InputDataAppliedPayload {
+  nodeId: string;
+  params: InputDataParams;
+}
+
+// Sort/Aggregate's Configure windows both just need the resolved input's
+// column names (same shape as Text Parser's own payload above) -- neither
+// needs row VALUES, unlike Unique's own stats-driven window.
+export interface SortWindowPayload {
+  nodeId: string;
+  nodeName: string;
+  columns: string[];
+  initialParams: SortParams;
+}
+export interface SortAppliedPayload {
+  nodeId: string;
+  params: SortParams;
+}
+export interface AggregateWindowPayload {
+  nodeId: string;
+  nodeName: string;
+  columns: string[];
+  initialParams: AggregateParams;
+}
+export interface AggregateAppliedPayload {
+  nodeId: string;
+  params: AggregateParams;
 }
 
 // Unique's Configure window needs the resolved input's columns AND rows
@@ -301,6 +362,14 @@ declare global {
       // (no show/focus, unlike openBrowseWindow above).
       pushBrowseUpdate: (payload: BrowseWindowPayload) => void;
 
+      // Same pure-viewer pattern as Browse above, just for the Summary
+      // (per-column stats/distribution) window instead.
+      openSummaryWindow: (payload: SummaryWindowPayload) => void;
+      requestSummaryInit: (nodeId: string) => Promise<SummaryWindowPayload>;
+      onSummaryInit: (cb: (payload: SummaryWindowPayload) => void) => () => void;
+      closeSummaryWindow: () => void;
+      pushSummaryUpdate: (payload: SummaryWindowPayload) => void;
+
       // Main window: open (or focus/reseed) the separate Header Promoter
       // configure window for one node -- same real-window pattern as
       // Filter Builder above, including round-tripping edits back on Apply.
@@ -355,6 +424,45 @@ declare global {
       onCleanerInit: (cb: (payload: CleanerWindowPayload) => void) => () => void;
       applyCleaner: (payload: CleanerAppliedPayload) => void;
       closeCleanerWindow: () => void;
+
+      // Same real-window, round-trips-on-Apply pattern as Cleaner above.
+      openTextParserWindow: (payload: TextParserWindowPayload) => void;
+      onTextParserApplied: (cb: (payload: TextParserAppliedPayload) => void) => () => void;
+      requestTextParserInit: (nodeId: string) => Promise<TextParserWindowPayload>;
+      onTextParserInit: (cb: (payload: TextParserWindowPayload) => void) => () => void;
+      applyTextParser: (payload: TextParserAppliedPayload) => void;
+      closeTextParserWindow: () => void;
+
+      // Input Data -- same real-window, round-trips-on-Apply IPC shape as
+      // every other Configure window, plus one method none of the others
+      // need: its own native file-picker dialog (chooseInputDataFile),
+      // since this window's whole job starts with "pick a file", not
+      // "edit params for an already-flowing table".
+      openInputDataWindow: (payload: InputDataWindowPayload) => void;
+      onInputDataApplied: (cb: (payload: InputDataAppliedPayload) => void) => () => void;
+      requestInputDataInit: (nodeId: string) => Promise<InputDataWindowPayload>;
+      onInputDataInit: (cb: (payload: InputDataWindowPayload) => void) => () => void;
+      applyInputData: (payload: InputDataAppliedPayload) => void;
+      closeInputDataWindow: () => void;
+      chooseInputDataFile: () => Promise<string | null>;
+
+      // Sort -- same real-window, round-trips-on-Apply IPC shape as
+      // every other Configure window.
+      openSortWindow: (payload: SortWindowPayload) => void;
+      onSortApplied: (cb: (payload: SortAppliedPayload) => void) => () => void;
+      requestSortInit: (nodeId: string) => Promise<SortWindowPayload>;
+      onSortInit: (cb: (payload: SortWindowPayload) => void) => () => void;
+      applySort: (payload: SortAppliedPayload) => void;
+      closeSortWindow: () => void;
+
+      // Aggregate -- same real-window, round-trips-on-Apply IPC shape as
+      // every other Configure window.
+      openAggregateWindow: (payload: AggregateWindowPayload) => void;
+      onAggregateApplied: (cb: (payload: AggregateAppliedPayload) => void) => () => void;
+      requestAggregateInit: (nodeId: string) => Promise<AggregateWindowPayload>;
+      onAggregateInit: (cb: (payload: AggregateWindowPayload) => void) => () => void;
+      applyAggregate: (payload: AggregateAppliedPayload) => void;
+      closeAggregateWindow: () => void;
 
       // Main window: open (or focus/reseed) the separate Unique
       // configure window for one node -- same real-window pattern as

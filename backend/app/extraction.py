@@ -9,6 +9,7 @@ prototype with no license-server integration yet.
 """
 
 import json
+import re
 
 import camelot
 import fitz
@@ -218,6 +219,18 @@ def _h2_fitz(file_path, page_num, table_area_coords, column_coords):
                     return i
             return nc - 1
 
+    # Each row's own position along whichever raw axis the clustering
+    # above actually grouped rows by -- (w[0]+w[2])/2 for rot 90/270
+    # (rows there are clustered along the page's X axis, since rotation
+    # swaps which raw axis is "row" vs "column"), (w[1]+w[3])/2 otherwise.
+    # Used below to tell a genuinely wrapped continuation line (sitting
+    # unusually CLOSE to the row above) from a coincidentally-similar-
+    # shaped standalone row (a normal row's distance away).
+    if rot in (90, 270):
+        row_ys = [sum((w[0] + w[2]) / 2 for w in rw) / len(rw) for rw in rows]
+    else:
+        row_ys = [sum((w[1] + w[3]) / 2 for w in rw) / len(rw) for rw in rows]
+
     data = []
     for rw in rows:
         cells = [""] * nc
@@ -225,11 +238,18 @@ def _h2_fitz(file_path, page_num, table_area_coords, column_coords):
             idx = _ci(w)
             cells[idx] = (cells[idx] + " " + w[4]).strip()
         data.append(cells)
-    data = _merge_wrapped_continuation_rows(data)
+    data = _merge_wrapped_continuation_rows(data, row_ys)
     return pd.DataFrame(data, columns=[f"Column_{i+1}" for i in range(nc)])
 
 
-def _merge_wrapped_continuation_rows(data):
+_NUMERIC_CELL_RE = re.compile(r"^[(\-+]?[$€£]?\s*\d[\d,]*(?:\.\d+)?\s*%?\)?$")
+
+
+def _looks_numeric(s):
+    return bool(_NUMERIC_CELL_RE.match(s.strip()))
+
+
+def _merge_wrapped_continuation_rows(data, row_ys):
     """Row-clustering here is purely y-position based (there are no user-
     drawn row guides, only column ones), so a cell whose text wraps onto a
     second visual line gets clustered as its own "row" -- one with real
@@ -239,15 +259,52 @@ def _merge_wrapped_continuation_rows(data):
     new logical row, so fold it back in rather than emitting it as its own
     mostly-blank row (which otherwise makes every other column look like
     it lost real data on that line).
+
+    Content shape alone (one populated column matching the row above)
+    ISN'T a safe enough signal on its own, though -- confirmed live on a
+    real payroll PDF: a per-section subtotal row (blank label column,
+    just a number) matches that exact shape too, and was silently getting
+    glued onto the last real data row above it instead of staying its own
+    row ("0.00" + "467.80" + "935.60" concatenated into one garbled cell).
+    The actual difference between the two is vertical distance: a wrapped
+    line sits unusually CLOSE to the row above (it's the same visual row,
+    just spilling onto a second line), while a genuine standalone row --
+    subtotal or otherwise -- sits a normal row's distance away, same as
+    any other row. `row_ys` (one entry per `data` row, same order) is
+    each row's own position along the axis rows were clustered on, used
+    here to require BOTH signals -- matching shape AND an unusually small
+    gap -- before folding two rows together.
+
+    Even that combination isn't enough on its own, though -- confirmed
+    live on a real, densely-packed payroll deductions table: a per-section
+    TOTAL row sits at the exact same row-to-row spacing as every ordinary
+    line item above it (no extra gap before it), so `is_close` alone
+    doesn't tell them apart there. What actually distinguishes the two
+    cases is what kind of content is spilling over: a genuinely wrapped
+    line is always TEXT (a long label/description that didn't fit on one
+    line -- letters, spilling to a second visual line), while a dollar
+    amount or other short number is never long enough to wrap across two
+    lines in a well-formed table. So a lone populated cell that parses as
+    a plain number (`_looks_numeric`) is never folded, even when both the
+    shape and distance signals say to -- it's the one signal that isn't
+    ambiguous between "wrapped text" and "the next row's total."
     """
+    if len(data) < 2:
+        return data
+    gaps = sorted(abs(row_ys[i] - row_ys[i - 1]) for i in range(1, len(row_ys)))
+    typical_gap = gaps[len(gaps) // 2]  # median -- robust to a few unusually large/small gaps
     merged = []
-    for cells in data:
-        nonempty = [i for i, c in enumerate(cells) if c]
-        if merged and len(nonempty) == 1 and merged[-1][nonempty[0]]:
-            i = nonempty[0]
-            merged[-1][i] = (merged[-1][i] + " " + cells[i]).strip()
+    merged_ys = []
+    for i, cells in enumerate(data):
+        nonempty = [j for j, c in enumerate(cells) if c]
+        is_close = merged_ys and typical_gap > 0 and abs(row_ys[i] - merged_ys[-1]) < typical_gap * 0.6
+        is_wrappable_text = len(nonempty) == 1 and not _looks_numeric(cells[nonempty[0]])
+        if merged and is_wrappable_text and merged[-1][nonempty[0]] and is_close:
+            j = nonempty[0]
+            merged[-1][j] = (merged[-1][j] + " " + cells[j]).strip()
         else:
             merged.append(cells)
+            merged_ys.append(row_ys[i])
     return merged
 
 

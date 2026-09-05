@@ -171,6 +171,7 @@ export interface ProcessorNodeInstance {
   color: string;
   hasOutput?: boolean;
   hasExtraInput?: boolean;
+  hasInput?: boolean;
   x: number;
   y: number;
   // Set via the node's right-click context menu (Rename / Add description)
@@ -322,6 +323,87 @@ export interface CleaningOperation {
 }
 export interface CleanerParams {
   operations: CleaningOperation[];
+}
+
+// Text Parser's params -- Power Query's own no-code text-extraction
+// toolset (Transform > Extract, and Split Column by Delimiter), as an
+// alternative to writing a regex pattern by hand (see the Regular
+// Expressions node for that). Same ordered-list-of-operations shape as
+// Cleaner's own CleaningOperation above, but each operation ADDS new
+// column(s) computed from one source column rather than mutating it in
+// place -- see backend/app/nodes.py's parse_text for exactly what each
+// one does and which `params` keys it reads. `occurrence`/
+// `startOccurrence`/`endOccurrence` are "first" | "last" | a positive
+// integer string (1-based, "which occurrence of the delimiter") --
+// matching how a non-programmer would actually describe it, not a raw
+// 0-based index.
+export type TextParseOperationType =
+  | "text_before"
+  | "text_after"
+  | "text_between"
+  | "split_delimiter"
+  | "first_chars"
+  | "last_chars"
+  | "range";
+export interface TextParseOperationParams {
+  delimiter?: string;
+  occurrence?: string;
+  startDelimiter?: string;
+  endDelimiter?: string;
+  startOccurrence?: string;
+  endOccurrence?: string;
+  splitAt?: "each" | "left" | "right";
+  count?: string;
+  start?: string;
+  length?: string;
+}
+export interface TextParseOperation {
+  id: string;
+  column: string;
+  operation: TextParseOperationType;
+  params: TextParseOperationParams;
+  newColumnName: string;
+}
+export interface TextParserParams {
+  operations: TextParseOperation[];
+}
+
+// Input Data's own params -- unlike every other node's params, these don't
+// describe a TRANSFORM (there's no upstream table to transform -- see
+// backend/app/nodes.py's file_input), they're the only place this node's
+// data comes from at all. `sheet` is only meaningful for an .xlsx/.xls
+// `path` (undefined/omitted means "first sheet", same as the backend's own
+// `params.get("sheet") or 0` default) -- a .csv/.tsv path just ignores it.
+export interface InputDataParams {
+  path?: string;
+  sheet?: string;
+}
+
+// Sort's own params -- an ORDERED list of sort keys (Excel "Sort" dialog
+// style, "Add Level"), applied together as one multi-key sort (see
+// backend/app/nodes.py's sort_rows), not one sort per key run in sequence.
+export interface SortKey {
+  id: string;
+  column: string;
+  direction: "asc" | "desc";
+}
+export interface SortParams {
+  keys: SortKey[];
+}
+
+// Aggregate's own params -- ordered list of {column, aggregation} metrics,
+// each becoming one column ("Sum of Amount") in the single-row output (see
+// backend/app/nodes.py's aggregate_columns). Order here IS the output
+// column order, so -- like Text Parser's operations -- this list is
+// reorderable, not just addable/removable.
+export type AggregateType = "sum" | "average" | "count" | "min" | "max";
+export interface AggregateMetric {
+  id: string;
+  column: string;
+  aggregation: AggregateType;
+}
+export interface AggregateParams {
+  metrics: AggregateMetric[];
 }
 
 // Unique's params -- ported from the original OWDeduplicator widget

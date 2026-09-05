@@ -107,6 +107,25 @@ contextBridge.exposeInMainWorld("alteraStudio", {
     ipcRenderer.send("browse:push-update", payload);
   },
 
+  // Main window: open (or focus/reseed) the separate Summary data-profile
+  // window for one node -- same pure-viewer shape as Browse above (no
+  // onSummaryApplied counterpart, nothing to write back).
+  openSummaryWindow: (payload: unknown): void => {
+    ipcRenderer.invoke("summary:open", payload);
+  },
+  requestSummaryInit: (nodeId: string): Promise<unknown> => ipcRenderer.invoke("summary:request-init", nodeId),
+  onSummaryInit: (cb: (payload: unknown) => void): (() => void) => {
+    const listener = (_event: unknown, payload: unknown) => cb(payload);
+    ipcRenderer.on("summary:init", listener);
+    return () => ipcRenderer.removeListener("summary:init", listener);
+  },
+  closeSummaryWindow: (): void => {
+    ipcRenderer.send("summary:close");
+  },
+  pushSummaryUpdate: (payload: unknown): void => {
+    ipcRenderer.send("summary:push-update", payload);
+  },
+
   // Main window: open (or focus/reseed) the separate Header Promoter
   // configure window for one node -- same real-window, round-trips-on-
   // Apply pattern as Filter Builder above.
@@ -201,6 +220,96 @@ contextBridge.exposeInMainWorld("alteraStudio", {
   },
   closeCleanerWindow: (): void => {
     ipcRenderer.send("cleaner:close");
+  },
+
+  // Same real-window, round-trips-on-Apply pattern as Cleaner above.
+  openTextParserWindow: (payload: unknown): void => {
+    ipcRenderer.invoke("textParser:open", payload);
+  },
+  onTextParserApplied: (cb: (payload: unknown) => void): (() => void) => {
+    const listener = (_event: unknown, payload: unknown) => cb(payload);
+    ipcRenderer.on("textParser:applied", listener);
+    return () => ipcRenderer.removeListener("textParser:applied", listener);
+  },
+  requestTextParserInit: (nodeId: string): Promise<unknown> => ipcRenderer.invoke("textParser:request-init", nodeId),
+  onTextParserInit: (cb: (payload: unknown) => void): (() => void) => {
+    const listener = (_event: unknown, payload: unknown) => cb(payload);
+    ipcRenderer.on("textParser:init", listener);
+    return () => ipcRenderer.removeListener("textParser:init", listener);
+  },
+  applyTextParser: (payload: unknown): void => {
+    ipcRenderer.send("textParser:apply", payload);
+  },
+  closeTextParserWindow: (): void => {
+    ipcRenderer.send("textParser:close");
+  },
+
+  // Same real-window, round-trips-on-Apply pattern as Cleaner/Text Parser
+  // above, plus its own native file-picker dialog.
+  openInputDataWindow: (payload: unknown): void => {
+    ipcRenderer.invoke("inputData:open", payload);
+  },
+  onInputDataApplied: (cb: (payload: unknown) => void): (() => void) => {
+    const listener = (_event: unknown, payload: unknown) => cb(payload);
+    ipcRenderer.on("inputData:applied", listener);
+    return () => ipcRenderer.removeListener("inputData:applied", listener);
+  },
+  requestInputDataInit: (nodeId: string): Promise<unknown> => ipcRenderer.invoke("inputData:request-init", nodeId),
+  onInputDataInit: (cb: (payload: unknown) => void): (() => void) => {
+    const listener = (_event: unknown, payload: unknown) => cb(payload);
+    ipcRenderer.on("inputData:init", listener);
+    return () => ipcRenderer.removeListener("inputData:init", listener);
+  },
+  applyInputData: (payload: unknown): void => {
+    ipcRenderer.send("inputData:apply", payload);
+  },
+  closeInputDataWindow: (): void => {
+    ipcRenderer.send("inputData:close");
+  },
+  chooseInputDataFile: (): Promise<string | null> => ipcRenderer.invoke("inputData:chooseFile"),
+
+  // Same real-window, round-trips-on-Apply pattern as every Configure
+  // window above.
+  openSortWindow: (payload: unknown): void => {
+    ipcRenderer.invoke("sort:open", payload);
+  },
+  onSortApplied: (cb: (payload: unknown) => void): (() => void) => {
+    const listener = (_event: unknown, payload: unknown) => cb(payload);
+    ipcRenderer.on("sort:applied", listener);
+    return () => ipcRenderer.removeListener("sort:applied", listener);
+  },
+  requestSortInit: (nodeId: string): Promise<unknown> => ipcRenderer.invoke("sort:request-init", nodeId),
+  onSortInit: (cb: (payload: unknown) => void): (() => void) => {
+    const listener = (_event: unknown, payload: unknown) => cb(payload);
+    ipcRenderer.on("sort:init", listener);
+    return () => ipcRenderer.removeListener("sort:init", listener);
+  },
+  applySort: (payload: unknown): void => {
+    ipcRenderer.send("sort:apply", payload);
+  },
+  closeSortWindow: (): void => {
+    ipcRenderer.send("sort:close");
+  },
+
+  openAggregateWindow: (payload: unknown): void => {
+    ipcRenderer.invoke("aggregate:open", payload);
+  },
+  onAggregateApplied: (cb: (payload: unknown) => void): (() => void) => {
+    const listener = (_event: unknown, payload: unknown) => cb(payload);
+    ipcRenderer.on("aggregate:applied", listener);
+    return () => ipcRenderer.removeListener("aggregate:applied", listener);
+  },
+  requestAggregateInit: (nodeId: string): Promise<unknown> => ipcRenderer.invoke("aggregate:request-init", nodeId),
+  onAggregateInit: (cb: (payload: unknown) => void): (() => void) => {
+    const listener = (_event: unknown, payload: unknown) => cb(payload);
+    ipcRenderer.on("aggregate:init", listener);
+    return () => ipcRenderer.removeListener("aggregate:init", listener);
+  },
+  applyAggregate: (payload: unknown): void => {
+    ipcRenderer.send("aggregate:apply", payload);
+  },
+  closeAggregateWindow: (): void => {
+    ipcRenderer.send("aggregate:close");
   },
 
   // Main window: open (or focus/reseed) the separate Unique configure

@@ -2450,7 +2450,7 @@ const KonvaA4Editor = () => {
   // flow, which creates the node and connects the in-progress connection
   // to it in one action, KNIME-style.
   const handleAddProcessorNode = useCallback(
-    (entry: { name: string; icon: string; color: string; hasOutput?: boolean; hasExtraInput?: boolean }, position?: { x: number; y: number }): string => {
+    (entry: { name: string; icon: string; color: string; hasOutput?: boolean; hasExtraInput?: boolean; hasInput?: boolean }, position?: { x: number; y: number }): string => {
       const id = `proc-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
       setProcessorNodes((prev) => {
         const pos = position ?? { x: 520 + (prev.length % 4) * 170, y: 40 + Math.floor(prev.length / 4) * 150 };
@@ -2461,6 +2461,7 @@ const KonvaA4Editor = () => {
           color: entry.color,
           hasOutput: entry.hasOutput,
           hasExtraInput: entry.hasExtraInput,
+          hasInput: entry.hasInput,
           x: pos.x,
           y: pos.y,
         };
@@ -2525,6 +2526,26 @@ const KonvaA4Editor = () => {
   }, [handleUpdateProcessorNodeParams]);
   useEffect(() => {
     return window.alteraStudio.onCleanerApplied(({ nodeId, params }) => {
+      handleUpdateProcessorNodeParams(nodeId, params as unknown as Record<string, unknown>);
+    });
+  }, [handleUpdateProcessorNodeParams]);
+  useEffect(() => {
+    return window.alteraStudio.onTextParserApplied(({ nodeId, params }) => {
+      handleUpdateProcessorNodeParams(nodeId, params as unknown as Record<string, unknown>);
+    });
+  }, [handleUpdateProcessorNodeParams]);
+  useEffect(() => {
+    return window.alteraStudio.onInputDataApplied(({ nodeId, params }) => {
+      handleUpdateProcessorNodeParams(nodeId, params as unknown as Record<string, unknown>);
+    });
+  }, [handleUpdateProcessorNodeParams]);
+  useEffect(() => {
+    return window.alteraStudio.onSortApplied(({ nodeId, params }) => {
+      handleUpdateProcessorNodeParams(nodeId, params as unknown as Record<string, unknown>);
+    });
+  }, [handleUpdateProcessorNodeParams]);
+  useEffect(() => {
+    return window.alteraStudio.onAggregateApplied(({ nodeId, params }) => {
       handleUpdateProcessorNodeParams(nodeId, params as unknown as Record<string, unknown>);
     });
   }, [handleUpdateProcessorNodeParams]);

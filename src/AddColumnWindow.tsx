@@ -362,9 +362,24 @@ export default function AddColumnWindow() {
                 {validationError ? (
                   <p className="formula-error-hint">{validationError}</p>
                 ) : (
-                  <p className="change-type-hint">
-                    Reference a column with [Column Name]. Operators: + − × ÷ (+ also joins text), {"= <> < <= > >="} to compare. Functions: IF, AND, OR, CONTAINS, UPPER, LOWER, TRIM, LEN, CONCAT, ROUND, LEFT, RIGHT, ABS. ↑↓ to choose, Tab/Enter to accept.
-                  </p>
+                  <div className="formula-syntax-help">
+                    <div className="formula-syntax-row">
+                      <span className="formula-syntax-label">Columns</span>
+                      <code className="formula-syntax-chip">[Column Name]</code>
+                    </div>
+                    <div className="formula-syntax-row">
+                      <span className="formula-syntax-label">Operators</span>
+                      <code className="formula-syntax-chip">{"+ − × ÷ = <> < <= > >="}</code>
+                    </div>
+                    <div className="formula-syntax-row">
+                      <span className="formula-syntax-label">Functions</span>
+                      <div className="formula-syntax-chip-list">
+                        {FORMULA_FUNCTIONS.map((f) => (
+                          <code key={f} className="formula-syntax-chip">{f}</code>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
                 )}
               </div>
 

@@ -43,3 +43,17 @@ export async function runProcessorNode(
   if (!res.ok) throw new Error((await res.json()).detail ?? `HTTP ${res.status}`);
   return res.json();
 }
+
+// Input Data's Configure window calls this right after a file is chosen,
+// to populate its sheet dropdown for a multi-sheet .xlsx/.xls -- a
+// separate, stateless lookup from /nodes/run (see routers/nodes.py's own
+// comment on /inspect-file), not a real node run.
+export async function inspectDataFile(path: string): Promise<{ sheets: string[] | null }> {
+  const res = await fetch(`${window.alteraStudio.backendUrl}/nodes/inspect-file`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path }),
+  });
+  if (!res.ok) throw new Error((await res.json()).detail ?? `HTTP ${res.status}`);
+  return res.json();
+}
