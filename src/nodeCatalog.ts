@@ -22,13 +22,14 @@
 // in Alteryx, not a separate "transform" bucket); "join" mirrors Join
 // (Join, Append Fields, Union -- anything combining two tables); "parse"
 // mirrors Parse (RegEx, Text To Columns). "transform" mirrors Alteryx's
-// own Transform category (Cross Tab, Transpose, Summarize, Running
-// Total) -- left unused until Pivot Columns/Unpivot Columns existed to
-// put in it (the exact reshape shape that category is for); Preparation
-// had grown to 13 nodes by the time those landed, so splitting them out
-// is both truer to Alteryx's own grouping and keeps Preparation from
-// becoming a catch-all.
-export type CategoryKey = "io" | "preparation" | "transform" | "join" | "parse";
+// own Transform category (Cross Tab, Transpose, Running Total) -- left
+// unused until Pivot Columns/Unpivot Columns existed to put in it (the
+// exact reshape shape that category is for); Preparation had grown to 13
+// nodes by the time those landed, so splitting them out is both truer to
+// Alteryx's own grouping and keeps Preparation from becoming a catch-all.
+// "analysis" has no Alteryx equivalent used here -- see its own comment
+// further down, by Summary/Aggregate's entries.
+export type CategoryKey = "io" | "preparation" | "transform" | "join" | "parse" | "analysis";
 
 export interface NodeCatalogEntry {
   name: string;
@@ -88,9 +89,10 @@ export const CATEGORY_META: Record<CategoryKey, { label: string; color: string }
   transform: { label: "Transform", color: "#E0A526" },
   join: { label: "Join", color: "#7753A0" },
   parse: { label: "Parse", color: "#E86F53" },
+  analysis: { label: "Analysis", color: "#9BB058" },
 };
 
-export const CATEGORY_ORDER: CategoryKey[] = ["io", "preparation", "transform", "join", "parse"];
+export const CATEGORY_ORDER: CategoryKey[] = ["io", "preparation", "transform", "join", "parse", "analysis"];
 
 // Shared with SchemaView.tsx's onDrop handler -- the dataTransfer mime type
 // used to recognize a drag that originated from this catalog (as opposed to
@@ -115,7 +117,6 @@ export const NODE_CATALOG: NodeCatalogEntry[] = [
   { name: "Input Data", description: "Load a local Excel (.xlsx) or CSV file as a table -- no upstream connection needed.", icon: "./node-icons/input_data.svg", category: "io", hasInput: false, mainInputMax: 0 },
   { name: "Export", description: "Export one or more datasets to Excel (.xlsx) or CSV.", icon: "./node-icons/excel_exporter.svg", category: "io", hasOutput: false },
   { name: "Browse", description: "Preview a table's rows and columns without modifying the data.", icon: "./node-icons/browse.svg", category: "io", hasOutput: false, mainInputMax: 1 },
-  { name: "Summary", description: "Per-column stats, distributions, and missing-value/gap detection -- a quick health check of a table.", icon: "./node-icons/summary.svg", category: "io", hasOutput: false, mainInputMax: 1 },
   // Preparation -- Alteryx's own Select tool covers exactly what Column
   // Edit and Change Type do (reorder/rename/delete columns; change a
   // column's type), and Record ID is exactly Index Column. Shift
@@ -138,14 +139,20 @@ export const NODE_CATALOG: NodeCatalogEntry[] = [
   { name: "Sort", description: "Sort rows by one or more columns, like Excel's Sort dialog.", icon: "./node-icons/sort.svg", category: "preparation", mainInputMax: 1 },
   // Transform -- Alteryx's own Cross Tab/Transpose category. Pivot/
   // Unpivot Columns are exactly that reshape shape, not the single-table
-  // cleanup Preparation's other tools do. Aggregate is Alteryx's own
-  // Summarize tool (see this category's own comment above, which already
-  // names it) -- collapses a whole table into one row of sums/averages/
-  // etc, the same "reshape the table" kind of work Pivot/Unpivot do, not
-  // a same-shape cleanup.
+  // cleanup Preparation's other tools do.
   { name: "Unpivot Columns", description: "Turn selected columns into Attribute/Value row pairs, like Power Query's Unpivot Columns.", icon: "./node-icons/unpivot.svg", category: "transform", mainInputMax: 1 },
   { name: "Pivot Columns", description: "Turn a labels column into new column headers and a values column into their contents, like Power Query's Pivot Column.", icon: "./node-icons/pivot.svg", category: "transform", mainInputMax: 1 },
-  { name: "Aggregate", description: "Collapse a table into one row of sums, averages, counts, minimums, and maximums.", icon: "./node-icons/aggregate.svg", category: "transform", mainInputMax: 1 },
+  // Analysis -- the catalog's own category (no direct Alteryx equivalent
+  // used here, unlike every other bucket above): Summary and Aggregate
+  // both look AT a table rather than reshape/clean it -- Summary as a
+  // per-column health check, Aggregate as sums/averages/counts collapsed
+  // into one row. Summary used to sit in In/Out (it's a sink, like Browse)
+  // and Aggregate in Transform (Alteryx's own Summarize tool lives there),
+  // but grouping them here instead reads truer to what a user is actually
+  // reaching for both for: understanding the data, not routing or
+  // reshaping it.
+  { name: "Summary", description: "Per-column stats, distributions, and missing-value/gap detection -- a quick health check of a table.", icon: "./node-icons/summary.svg", category: "analysis", hasOutput: false, mainInputMax: 1 },
+  { name: "Aggregate", description: "Collapse a table into one row of sums, averages, counts, minimums, and maximums.", icon: "./node-icons/aggregate.svg", category: "analysis", mainInputMax: 1 },
   // Join -- Alteryx's own Join tool is exactly Merge's "match on shared
   // columns" mode, and its Append Fields tool is exactly Horizontal
   // Stack's "combine by position" mode.

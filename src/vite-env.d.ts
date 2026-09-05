@@ -326,6 +326,7 @@ declare global {
       saveProjectToPath: (filePath: string, jsonData: string) => Promise<boolean>;
       openProjectDialog: () => Promise<{ path: string; data: string } | null>;
       restartApp: () => void;
+      openExternalUrl: (url: string) => void;
       openSettingsWindow: (payload: SettingsPayload) => void;
       loadPersistedSettings: () => Promise<PersistedSettings | null>;
       onSettingsApplied: (cb: (payload: SettingsPayload) => void) => () => void;

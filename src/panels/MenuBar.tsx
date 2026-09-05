@@ -41,6 +41,7 @@ interface MenuBarProps {
   onSaveProject: () => void;
   onSaveProjectAs: () => void;
   onOpenSettings: () => void;
+  onOpenExternalUrl: (url: string) => void;
   onRestart: () => void;
   onExit: () => void;
   onUndo: () => void;
@@ -66,6 +67,7 @@ export default function MenuBar({
   onSaveProject,
   onSaveProjectAs,
   onOpenSettings,
+  onOpenExternalUrl,
   onRestart,
   onExit,
   onUndo,
@@ -142,6 +144,7 @@ export default function MenuBar({
             <div className="ctx-menu-divider" />
             <div className="ctx-menu-item" onClick={() => runAndClose(onOpenSettings)}>
               <span>Settings</span>
+              <span className="ctx-menu-shortcut">Ctrl+,</span>
             </div>
             <div className="ctx-menu-divider" />
             <div className="ctx-menu-item" onClick={() => runAndClose(onRestart)}>
@@ -204,11 +207,11 @@ export default function MenuBar({
         </button>
         {openMenu === "help" && (
           <div className="menu-bar-dropdown">
-            {/* Settings' own About tab is the one place license/version
-                info actually lives -- no separate docs/support surface
-                exists in this app yet to link to. */}
-            <div className="ctx-menu-item" onClick={() => runAndClose(onOpenSettings)}>
+            <div className="ctx-menu-item" onClick={() => runAndClose(() => onOpenExternalUrl("https://alteradatasuite.com/about"))}>
               <span>About Altera Data Suite</span>
+            </div>
+            <div className="ctx-menu-item" onClick={() => runAndClose(() => onOpenExternalUrl("https://alteradatasuite.com/docs"))}>
+              <span>Documentation</span>
             </div>
           </div>
         )}

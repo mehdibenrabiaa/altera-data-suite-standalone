@@ -14,6 +14,11 @@ contextBridge.exposeInMainWorld("alteraStudio", {
   restartApp: (): void => {
     ipcRenderer.send("app:restart");
   },
+  // Opens a URL in the user's default browser instead of navigating this
+  // window -- used by the Help menu's About/Docs links (see MenuBar.tsx).
+  openExternalUrl: (url: string): void => {
+    ipcRenderer.send("shell:openExternal", url);
+  },
 
   // Main window: open (or focus/reseed) the separate Settings window.
   openSettingsWindow: (payload: unknown): void => {

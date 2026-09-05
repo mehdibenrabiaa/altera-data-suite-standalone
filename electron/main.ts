@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from "electron";
 import { spawn, ChildProcess } from "node:child_process";
 import path from "node:path";
 import fs from "node:fs/promises";
@@ -743,6 +743,14 @@ ipcMain.handle("project:open", async () => {
 ipcMain.on("app:restart", () => {
   app.relaunch();
   app.exit();
+});
+
+// Help menu's About/Docs links -- opens in the user's default browser
+// rather than navigating this window. Restricted to http(s) so a
+// compromised renderer can't use this to launch an arbitrary local
+// file/protocol handler.
+ipcMain.on("shell:openExternal", (_event, url: string) => {
+  if (/^https?:\/\//i.test(url)) shell.openExternal(url);
 });
 
 app.whenReady().then(() => {

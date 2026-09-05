@@ -1,6 +1,6 @@
 import React from "react";
 import { Segmented, InputNumber, Typography } from "antd";
-import { ScissorOutlined, ApartmentOutlined, FileImageOutlined } from "@ant-design/icons";
+import { ScissorOutlined, ApartmentOutlined, FileImageOutlined, BgColorsOutlined } from "@ant-design/icons";
 import SectionCard from "./SectionCard";
 import Toggle from "./Toggle";
 import type { SettingsPayload } from "../types";
@@ -18,10 +18,22 @@ interface PreferencesTabProps {
 // page SettingsWindow rendered, just restyled onto the SectionCard/
 // settingRow chrome the rest of these tabs use, for a consistent look.
 const PreferencesTab: React.FC<PreferencesTabProps> = ({ values, onChange }) => {
-  const { sample, schemaSampleRowLimit, schemaPageLimit, autoExpandOutputDrawer, pdfRenderDpi, numPages } = values;
+  const { sample, schemaSampleRowLimit, schemaPageLimit, autoExpandOutputDrawer, pdfRenderDpi, numPages, theme } = values;
 
   return (
     <>
+      <SectionCard title="Theme" icon={<BgColorsOutlined />}>
+        <div className={styles.settingRow}>
+          <Text strong className={styles.settingLabel}>Appearance</Text>
+          <Segmented
+            size="small"
+            options={[{ label: "Light", value: "light" }, { label: "Dark", value: "dark" }]}
+            value={theme}
+            onChange={(v) => onChange({ theme: v as "light" | "dark" })}
+          />
+        </div>
+      </SectionCard>
+
       <SectionCard title="Sample Mode" icon={<ScissorOutlined />}>
         <div className={styles.settingRow}>
           <Text strong className={styles.settingLabel}>Enable</Text>
@@ -46,14 +58,14 @@ const PreferencesTab: React.FC<PreferencesTabProps> = ({ values, onChange }) => 
                 onChange={(v) => onChange({ sample: { ...sample, startPage: v ?? 1 } })}
                 style={{ width: 65 }}
               />
-              <span style={{ fontSize: 12, color: "#333333" }}>to</span>
+              <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>to</span>
               <InputNumber
                 size="small" min={sample.startPage} max={numPages || undefined}
                 value={sample.endPage}
                 onChange={(v) => onChange({ sample: { ...sample, endPage: v ?? 1 } })}
                 style={{ width: 65 }}
               />
-              {numPages > 0 && <span style={{ fontSize: 11, color: "#888888" }}>/ {numPages}</span>}
+              {numPages > 0 && <span style={{ fontSize: 11, color: "var(--text-muted)" }}>/ {numPages}</span>}
             </div>
           </div>
           <div className={styles.settingRow} style={{ display: sample.mode === "first_n" ? "flex" : "none" }}>
@@ -65,7 +77,7 @@ const PreferencesTab: React.FC<PreferencesTabProps> = ({ values, onChange }) => 
                 onChange={(v) => onChange({ sample: { ...sample, firstN: v ?? 1 } })}
                 style={{ width: 65 }}
               />
-              <span style={{ fontSize: 11, color: "#888888" }}>pages</span>
+              <span style={{ fontSize: 11, color: "var(--text-muted)" }}>pages</span>
             </div>
           </div>
         </div>
@@ -114,11 +126,11 @@ const PreferencesTab: React.FC<PreferencesTabProps> = ({ values, onChange }) => 
               onChange={(v) => onChange({ pdfRenderDpi: v ?? 288 })}
               style={{ width: 70 }}
             />
-            <span style={{ fontSize: 11, color: "#888888" }}>dpi</span>
+            <span style={{ fontSize: 11, color: "var(--text-muted)" }}>dpi</span>
           </div>
         </div>
         <div className={styles.settingRow}>
-          <span style={{ fontSize: 11, color: "#888888" }}>
+          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
             Lower values render pages faster at lower on-screen sharpness. Does not affect annotation or extraction accuracy.
           </span>
         </div>

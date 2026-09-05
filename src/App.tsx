@@ -32,7 +32,7 @@ import ToolbarPanel from "./panels/ToolbarPanel";
 import PageNavPanel from "./panels/PageNavPanel";
 import GroupsPanel from "./panels/GroupsPanel";
 import PropertiesPanel from "./panels/PropertiesPanel";
-import SettingsPanel from "./panels/SettingsPanel";
+import { CanvasToggles } from "./panels/SettingsPanel";
 import NodesPanel from "./panels/NodesPanel";
 import SchemaView from "./panels/SchemaView";
 import MenuBar from "./panels/MenuBar";
@@ -536,7 +536,6 @@ interface DockPanelsContextValue {
   // just hidden (keeps the dock layout's sizes stable across the toggle).
   disabled: boolean;
   toolbar: React.ComponentProps<typeof ToolbarPanel>;
-  settingsBar: React.ComponentProps<typeof SettingsPanel>;
   groups: React.ComponentProps<typeof GroupsPanel>;
   properties: React.ComponentProps<typeof PropertiesPanel>;
   canvas: {
@@ -571,22 +570,6 @@ function ToolbarGripIcon() {
       <circle cx="9" cy="9" r="1.4" />
       <circle cx="15" cy="3" r="1.4" />
       <circle cx="15" cy="9" r="1.4" />
-    </svg>
-  );
-}
-
-// Same six-dot grip, rotated 90° (2 columns x 3 rows instead of 3x2) — used
-// as the Settings tab's title, whose tab strip runs down a vertical rail
-// instead of across a horizontal one.
-function ToolbarGripIconVertical() {
-  return (
-    <svg className="toolbar-tab-grip" width="12" height="18" viewBox="0 0 12 18" fill="currentColor" style={{ display: "block" }}>
-      <circle cx="3" cy="3" r="1.4" />
-      <circle cx="9" cy="3" r="1.4" />
-      <circle cx="3" cy="9" r="1.4" />
-      <circle cx="9" cy="9" r="1.4" />
-      <circle cx="3" cy="15" r="1.4" />
-      <circle cx="9" cy="15" r="1.4" />
     </svg>
   );
 }
@@ -680,10 +663,6 @@ function DockPanelDisableHost({ disabled, children }: { disabled: boolean; child
 function ToolbarPanelContainer() {
   const ctx = React.useContext(DockPanelsContext)!;
   return <ToolbarPanel {...ctx.toolbar} schemaMode={ctx.disabled} />;
-}
-function SettingsPanelContainer() {
-  const ctx = React.useContext(DockPanelsContext)!;
-  return <SettingsPanel {...ctx.settingsBar} />;
 }
 // Content of the dockbox's headerless "Canvas" tab. It stays invisible and
 // click-through (see `.dock-style-canvas-dock-panel` in App.css) — its only
@@ -794,7 +773,7 @@ const DOCK_LAYOUT_STORAGE_KEY = "pdfConverter.dockLayout";
 // the toolbar's resize-lock forever. Only tab positions/groupings are meant
 // to survive across versions; structural panel config always comes fresh
 // from buildDefaultDockLayout().
-const DOCK_LAYOUT_VERSION = 11;
+const DOCK_LAYOUT_VERSION = 12;
 
 function buildDefaultDockLayout(): LayoutData {
   return {
@@ -838,14 +817,6 @@ function buildDefaultDockLayout(): LayoutData {
                 { id: "nodeLog", title: "Log", content: <NodeLogPanelContainer />, closable: false, cached: true },
               ],
               activeId: "smartrect",
-              size: 341,
-            },
-            // Settings/SM/TAG bar — a compact horizontal-content-row panel
-            // (see the .settingsbar-panel-body / left-rail-tab overrides in
-            // App.css) stacked here below Smart Rectangles, rather than a
-            // separate strip spanning the top of the whole layout.
-            {
-              tabs: [{ id: "settingsBar", group: "settingsBar", title: <ToolbarGripIconVertical />, content: <SettingsPanelContainer />, closable: false, cached: true }],
               size: 341,
             },
           ],
@@ -1018,6 +989,7 @@ const KonvaA4Editor = () => {
   // old hardcoded scale cap of 4, times 72 -- pdf.js's own scale:1.0
   // baseline).
   const [pdfRenderDpi, setPdfRenderDpi] = useState<number>(288);
+  const [theme, setTheme] = useState<"light" | "dark">("light");
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; rectId: string } | null>(null);
   // Smart-rectangle state
   const [smartPanelRectId, setSmartPanelRectId] = useState<string | null>(null);
@@ -1589,11 +1561,18 @@ const KonvaA4Editor = () => {
     // to the pre-existing hardcoded behavior rather than rendering at an
     // undefined/NaN DPI.
     setPdfRenderDpi(saved.pdfRenderDpi ?? 288);
+    setTheme(saved.theme ?? "light");
   }, []);
 
   useEffect(() => {
     return window.alteraStudio.onSettingsApplied(applyPersistedSettings);
   }, [applyPersistedSettings]);
+
+  // Drives every [data-theme="dark"] override in App.css -- see that
+  // file's own "Theme tokens" section.
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+  }, [theme]);
 
   // Whatever was saved last session, loaded once on launch -- otherwise
   // every restart silently reverts to hardcoded defaults.
@@ -3019,6 +2998,12 @@ const KonvaA4Editor = () => {
         if (e.shiftKey) handleSaveProjectAs();
         else handleSaveProject();
       }
+      // Ctrl/Cmd+, -- the standard Settings/Preferences shortcut on both
+      // Windows/Linux and macOS.
+      if ((e.ctrlKey || e.metaKey) && e.key === ",") {
+        e.preventDefault();
+        handleOpenSettings();
+      }
 
       if ((e.ctrlKey || e.metaKey) && e.key === "a") {
         e.preventDefault();
@@ -3660,8 +3645,9 @@ const KonvaA4Editor = () => {
       autoExpandOutputDrawer,
       pdfRenderDpi,
       numPages,
+      theme,
     });
-  }, [sampleConfig, closeAfterConvert, schemaSampleRowLimit, schemaPageLimit, autoExpandOutputDrawer, pdfRenderDpi, numPages]);
+  }, [sampleConfig, closeAfterConvert, schemaSampleRowLimit, schemaPageLimit, autoExpandOutputDrawer, pdfRenderDpi, numPages, theme]);
 
   const dockPanelsContextValue = useMemo<DockPanelsContextValue>(() => ({
     disabled: showSchema,
@@ -3675,13 +3661,6 @@ const KonvaA4Editor = () => {
       setShowInkOverlay,
       activeTool,
       setActiveTool,
-    },
-    settingsBar: {
-      onOpenSettings: handleOpenSettings,
-      sampleEnabled: sampleConfig.enabled,
-      onToggleSample: (v) => setSampleConfig((c) => ({ ...c, enabled: v })),
-      showLabels,
-      onToggleShowLabels: setShowLabels,
     },
     groups: {
       groups,
@@ -3784,6 +3763,7 @@ const KonvaA4Editor = () => {
           onSaveProject={handleSaveProject}
           onSaveProjectAs={handleSaveProjectAs}
           onOpenSettings={handleOpenSettings}
+          onOpenExternalUrl={(url) => window.alteraStudio.openExternalUrl(url)}
           onRestart={() => window.alteraStudio.restartApp()}
           onExit={() => window.close()}
           onUndo={handleUndo}
@@ -3818,6 +3798,12 @@ const KonvaA4Editor = () => {
               <Spin className="footer-render-spinner" indicator={<LoadingOutlined spin />} size="small" />
             )}
           </div>
+          <CanvasToggles
+            sampleEnabled={sampleConfig.enabled}
+            onToggleSample={(v) => setSampleConfig((c) => ({ ...c, enabled: v }))}
+            showLabels={showLabels}
+            onToggleShowLabels={setShowLabels}
+          />
         </div>
 
         {!pdfDoc && (
@@ -4389,7 +4375,6 @@ const KonvaA4Editor = () => {
               onLayoutChange={handleDockLayoutChange}
               groups={{
                 toolbar: { floatable: true, maximizable: false },
-                settingsBar: { floatable: true, maximizable: false },
               }}
               style={{ position: "absolute", inset: 0, pointerEvents: "none", background: "transparent" }}
             />
@@ -4415,6 +4400,7 @@ const KonvaA4Editor = () => {
                 time. */}
             <ErrorBoundary label="Schema Preview" compact>
               <SchemaView
+                theme={theme}
                 rectangles={rectangles}
                 groups={groups}
                 processorNodes={processorNodes}

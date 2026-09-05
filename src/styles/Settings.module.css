@@ -19,7 +19,8 @@ textarea,
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: #f5f5f5;
+  background: var(--bg-subtle);
+  color: var(--text-primary);
   font-family: "Google Sans Flex", sans-serif;
 }
 
@@ -39,8 +40,8 @@ textarea,
 .customTabs :global(.ant-tabs-nav) {
   margin-bottom: 0 !important;
   flex-shrink: 0;
-  background: #f5f5f5 !important;
-  border-bottom: 1px solid #e0e0e0 !important;
+  background: var(--bg-subtle) !important;
+  border-bottom: 1px solid var(--border-color) !important;
   padding: 0 20px !important;
 }
 
@@ -49,12 +50,12 @@ textarea,
   margin: 0 16px 0 0 !important;
   font-size: 12px !important;
   font-weight: 500 !important;
-  color: #555555 !important;
+  color: var(--text-secondary) !important;
   transition: none !important;
 }
 
 .customTabs :global(.ant-tabs-tab:hover) {
-  color: #1a1a1a !important;
+  color: var(--text-primary) !important;
 }
 
 .customTabs :global(.ant-tabs-tab-active .ant-tabs-tab-btn) {
@@ -72,7 +73,7 @@ textarea,
   min-height: 0;
   overflow-y: auto;
   padding: 20px;
-  background: #f5f5f5;
+  background: var(--bg-subtle);
 }
 
 .customTabs :global(.ant-tabs-content) {
@@ -86,7 +87,7 @@ textarea,
 
 /* ── Section card — flat, matches .properties-info-box / .op-card ── */
 .sectionCard {
-  border: 1px solid #e0e0e0 !important;
+  border: 1px solid var(--border-color) !important;
   border-radius: 0 !important;
   margin-bottom: 12px !important;
   box-shadow: none !important;
@@ -96,8 +97,8 @@ textarea,
 .sectionCard :global(.ant-card-head) {
   min-height: auto;
   padding: 8px 12px;
-  border-bottom: 1px solid #e0e0e0;
-  background: #f0f0f0;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-hover);
 }
 
 .sectionCard :global(.ant-card-head-title) {
@@ -106,7 +107,7 @@ textarea,
 
 .sectionCard :global(.ant-card-body) {
   padding: 2px 0;
-  background: #ffffff;
+  background: var(--bg-panel);
 }
 
 .sectionHeader {
@@ -116,14 +117,14 @@ textarea,
 }
 
 .sectionIcon {
-  color: #555555;
+  color: var(--text-secondary);
   font-size: 12px;
 }
 
 .sectionTitle {
   font-size: 12px !important;
   font-weight: 500 !important;
-  color: #555555 !important;
+  color: var(--text-secondary) !important;
 }
 
 /* ── Setting row ────────────────────────────────── */
@@ -133,7 +134,7 @@ textarea,
   justify-content: space-between;
   padding: 8px 12px;
   gap: 16px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--bg-hover);
   transition: none;
 }
 
@@ -143,13 +144,13 @@ textarea,
 
 .settingLabel {
   font-size: 12px !important;
-  color: #1a1a1a !important;
+  color: var(--text-primary) !important;
   font-weight: 500 !important;
 }
 
 .settingDesc {
   font-size: 11px;
-  color: #999999;
+  color: var(--text-muted);
   margin-top: 1px;
 }
 
@@ -157,7 +158,7 @@ textarea,
 .sliderValue {
   font-size: 11px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  color: #555555;
+  color: var(--text-secondary);
   min-width: 32px;
   text-align: right;
 }
@@ -177,7 +178,7 @@ textarea,
   width: 20px;
   height: 20px;
   border-radius: 0;
-  border: 1px solid #cccccc;
+  border: 1px solid var(--border-color-strong);
   cursor: pointer;
 }
 
@@ -267,7 +268,7 @@ textarea,
   border: 1px solid;
 }
 .stateBadge--urgent { background: #fdf2f2; border-color: #f3c6c6; color: #c0392b; }
-.stateBadge--normal { background: #ffffff; border-color: #e0e0e0; color: #555555; }
+.stateBadge--normal { background: var(--bg-panel); border-color: var(--border-color); color: var(--text-secondary); }
 
 /* Secondary notice strip below the hero banner */
 .noticeRow {
@@ -290,7 +291,7 @@ textarea,
 .activationLabel {
   font-size: 12px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--text-primary);
   margin-bottom: 6px;
 }
 
@@ -308,25 +309,25 @@ textarea,
 .helpText {
   margin-top: 8px;
   font-size: 11px;
-  color: #999999;
+  color: var(--text-muted);
 }
 .helpText a, .helpText a:hover, .helpText a:visited { color: #FE4D41; }
 
 /* ── Machine ID box — flat, matches .dedup-info-box ── */
 .machineIdSection {
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid var(--border-color);
   padding: 12px 16px;
 }
 
 .machineIdLabel {
   font-size: 11px;
-  color: #999999;
+  color: var(--text-muted);
   margin-bottom: 6px;
 }
 
 .machineIdBox {
-  background: #f0f0f0;
-  border: 1px solid #e0e0e0;
+  background: var(--bg-hover);
+  border: 1px solid var(--border-color);
   border-radius: 0;
   padding: 6px 10px;
   display: flex;
@@ -338,7 +339,7 @@ textarea,
 .machineIdVal {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 11px;
-  color: #555555;
+  color: var(--text-secondary);
   word-break: break-all;
 }
 
@@ -348,7 +349,7 @@ textarea,
   align-items: center;
   justify-content: space-between;
   padding: 8px 12px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--bg-hover);
   font-size: 12px;
 }
 
@@ -357,11 +358,11 @@ textarea,
 }
 
 .infoLabel {
-  color: #555555;
+  color: var(--text-secondary);
 }
 
 .infoValue {
-  color: #1a1a1a;
+  color: var(--text-primary);
   font-weight: 500;
 }
 
@@ -376,7 +377,7 @@ textarea,
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--bg-hover);
   font-size: 12px;
   color: #FE4D41;
   font-weight: 500;
@@ -389,7 +390,7 @@ textarea,
 }
 
 .linkRow:hover {
-  background: #fff5f5;
+  background: var(--bg-hover);
   color: #FE4D41;
 }
 
@@ -397,7 +398,7 @@ textarea,
   text-align: center;
   padding: 16px 0 4px;
   font-size: 11px;
-  color: #999999;
+  color: var(--text-muted);
 }
 
 /* ── Scrollbar ─────────────────────────────────── */
@@ -410,9 +411,9 @@ textarea,
 }
 
 .customTabs :global(.ant-tabs-body-holder)::-webkit-scrollbar-thumb {
-  background: #bbbbbb;
+  background: var(--border-color-strong);
 }
 
 .customTabs :global(.ant-tabs-body-holder)::-webkit-scrollbar-thumb:hover {
-  background: #888888;
+  background: var(--text-muted);
 }

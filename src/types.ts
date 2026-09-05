@@ -55,6 +55,11 @@ export interface SettingsPayload {
   // accuracy, only on-screen sharpness while zoomed in.
   pdfRenderDpi: number;
   numPages: number;
+  // Applied as a data-theme attribute on <html> (see App.tsx's theme
+  // useEffect) and read directly by SettingsWindow.tsx to theme its own
+  // separate window too. Defaults to "light" for settings.json files saved
+  // before this existed (see applyPersistedSettings's ?? fallback).
+  theme: "light" | "dark";
 }
 
 // What actually gets written to disk (see electron/main.ts's

@@ -1,32 +1,31 @@
 import { Divider } from "antd";
-import gearIcon from "../../public/gear.svg";
 import GrooveSwitch from "../components/GrooveSwitch";
 
-interface SettingsPanelProps {
-  onOpenSettings: () => void;
+interface CanvasTogglesProps {
   sampleEnabled: boolean;
   onToggleSample: (v: boolean) => void;
   showLabels: boolean;
   onToggleShowLabels: (v: boolean) => void;
 }
 
-export default function SettingsPanel({
-  onOpenSettings,
+// The SM (sample pages) / TAG (table name labels) toggles -- used to live in
+// their own dock panel alongside a Settings gear button (removed; Settings
+// is reachable from the File menu / Ctrl+, instead) -- rendered directly in
+// the page-nav footer (App.tsx's .app-footer) so they stay visible
+// regardless of which dock panel/tab is currently active.
+export function CanvasToggles({
   sampleEnabled,
   onToggleSample,
   showLabels,
   onToggleShowLabels,
-}: SettingsPanelProps) {
+}: CanvasTogglesProps) {
   return (
-    <div className="settingsbar-panel-body">
-      <button className="toolbar-btn ps-tool-btn" onClick={onOpenSettings} title="Settings">
-        <img src={gearIcon} alt="Settings" />
-      </button>
-      <Divider type="vertical" style={{ width: "1px", height: "28px", backgroundColor: "#cccccc", margin: "0 4px" }} />
+    <div className="footer-canvas-toggles">
       <div className="groove-toggle-group" title="Toggle page sampling (S)">
         <span className={`groove-toggle-label ${sampleEnabled ? "active" : ""}`}>SM</span>
         <GrooveSwitch checked={sampleEnabled} onChange={onToggleSample} />
       </div>
+      <Divider type="vertical" style={{ width: "1px", height: "20px", backgroundColor: "#cccccc", margin: "0 4px" }} />
       <div className="groove-toggle-group" title="Toggle table name labels (T)">
         <span className={`groove-toggle-label ${showLabels ? "active" : ""}`}>TAG</span>
         <GrooveSwitch checked={showLabels} onChange={onToggleShowLabels} />

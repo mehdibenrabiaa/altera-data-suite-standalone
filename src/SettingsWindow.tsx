@@ -11,26 +11,18 @@ import type { SettingsPayload } from "./types";
 import type { AppearanceSettings, LicenseStatus, LicenseInfo } from "./settingsAppTypes";
 import styles from "./styles/Settings.module.css";
 
-const antTheme = {
-  token: {
-    borderRadius: 0,
-    borderRadiusLG: 0,
-    borderRadiusSM: 0,
-    controlHeight: 28,
-    controlHeightSM: 24,
-    fontSize: 13,
-    fontFamily: '"Google Sans Flex", sans-serif',
-    colorBorder: "#e0e0e0",
-    colorPrimaryHover: "#bbb",
-    colorPrimary: "#FE4D41",
-    colorText: "#1a1a1a",
-    colorTextPlaceholder: "#999",
-    colorBgContainer: "#ffffff",
-    paddingSM: 8,
-    motionDurationFast: "0s",
-    motionDurationMid: "0s",
-    motionDurationSlow: "0s",
-  },
+const ANT_THEME_BASE = {
+  borderRadius: 0,
+  borderRadiusLG: 0,
+  borderRadiusSM: 0,
+  controlHeight: 28,
+  controlHeightSM: 24,
+  fontSize: 13,
+  fontFamily: '"Google Sans Flex", sans-serif',
+  paddingSM: 8,
+  motionDurationFast: "0s",
+  motionDurationMid: "0s",
+  motionDurationSlow: "0s",
 };
 
 // Rendered in its own native BrowserWindow (see electron/main.ts's
@@ -54,10 +46,48 @@ const DEV_FALLBACK_VALUES: SettingsPayload = {
   autoExpandOutputDrawer: true,
   pdfRenderDpi: 288,
   numPages: 0,
+  theme: "light",
+};
+
+// Same light/dark tokens as App.css's [data-theme] block (see that file's
+// "Theme tokens" comment) -- this window is a separate document that
+// doesn't inherit the main window's CSS custom properties, so antd's own
+// ConfigProvider tokens need the equivalent values duplicated here.
+const ANT_THEME_TOKENS = {
+  light: {
+    colorBorder: "#e0e0e0",
+    // Tabs' own nav-underline divider reads from this, separately from
+    // colorBorder above -- left at antd's own light default until now, so
+    // dark mode never actually touched it either.
+    colorBorderSecondary: "#e0e0e0",
+    colorPrimaryHover: "#bbb",
+    colorPrimary: "#FE4D41",
+    colorText: "#1a1a1a",
+    colorTextPlaceholder: "#999",
+    colorBgContainer: "#ffffff",
+    colorBgElevated: "#ffffff",
+  },
+  dark: {
+    colorBorder: "#454545",
+    colorBorderSecondary: "#454545",
+    colorPrimaryHover: "#ff8177",
+    colorPrimary: "#FE4D41",
+    colorText: "#e8e8e8",
+    colorTextPlaceholder: "#8a8a8a",
+    colorBgContainer: "#2b2b2b",
+    colorBgElevated: "#333333",
+  },
 };
 
 export default function SettingsWindow() {
   const [values, setValues] = useState<SettingsPayload | null>(null);
+
+  // Live preview as the Preferences tab's own theme control is toggled
+  // (see App.css's [data-theme="dark"] overrides, shared via that file's
+  // import above) -- takes effect immediately, before Save is even clicked.
+  useEffect(() => {
+    if (values) document.documentElement.setAttribute("data-theme", values.theme);
+  }, [values]);
 
   useEffect(() => {
     document.title = "Settings";
@@ -113,6 +143,8 @@ export default function SettingsWindow() {
   if (!values) return null;
 
   const update = (patch: Partial<SettingsPayload>) => setValues((v) => (v ? { ...v, ...patch } : v));
+
+  const antTheme = { token: { ...ANT_THEME_BASE, ...ANT_THEME_TOKENS[values.theme] } };
 
   const tabItems = [
     {

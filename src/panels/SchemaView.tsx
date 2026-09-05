@@ -182,7 +182,12 @@ const MIN_VISIBLE_CANVAS = 120;
 
 // Flat/dense theme matching the app's chrome -- same params the card's own
 // table preview used before it was dropped in favor of this drawer.
-const outputGridTheme = themeQuartz.withParams({
+// AG-Grid's Theming API builds a real Theme object per call (expensive,
+// and other code relies on referential stability -- see the comment a few
+// lines down), so both light and dark are precomputed once here rather
+// than reconstructed from `theme` on every render; the render site below
+// just picks between them.
+const outputGridThemeLight = themeQuartz.withParams({
   headerBackgroundColor: "#f0f2f5",
   headerTextColor: "#333333",
   headerFontSize: 11,
@@ -202,6 +207,32 @@ const outputGridTheme = themeQuartz.withParams({
   // Default AG-Grid resize-handle sizing, just recolored -- the house
   // accent at the earlier 3px width read as thick/out of place.
   headerColumnResizeHandleColor: "#cccccc",
+  headerColumnResizeHandleHeight: "60%",
+  headerColumnResizeHandleWidth: 1,
+});
+// Same shape as outputGridThemeLight, values swapped to the app's own dark
+// palette (App.css's [data-theme="dark"] tokens) rather than AG-Grid's own
+// stock dark theme, so the previewer actually matches the surrounding
+// chrome instead of introducing a third gray.
+const outputGridThemeDark = themeQuartz.withParams({
+  headerBackgroundColor: "#333333",
+  headerTextColor: "#e8e8e8",
+  headerFontSize: 11,
+  headerFontWeight: 600,
+  cellFontSize: 11,
+  fontSize: 11,
+  foregroundColor: "#e8e8e8",
+  borderColor: "#454545",
+  borderRadius: 0,
+  wrapperBorderRadius: 0,
+  rowHeight: 26,
+  headerHeight: 28,
+  cellHorizontalPadding: 12,
+  spacing: 4,
+  backgroundColor: "#2b2b2b",
+  oddRowBackgroundColor: "#2b2b2b",
+  rowHoverColor: "rgba(254, 77, 65, 0.14)",
+  headerColumnResizeHandleColor: "#5a5a5a",
   headerColumnResizeHandleHeight: "60%",
   headerColumnResizeHandleWidth: 1,
 });
@@ -451,7 +482,16 @@ function TableColumnRow({ original, display, onRename }: { original: string; dis
             setEditing(true);
           }}
         >
-          <img src="./pen-line.svg" alt="" width={12} height={12} />
+          {/* Inline (not <img src="./pen-line.svg">) specifically so
+              stroke="currentColor" actually picks up this button's own CSS
+              color -- an <img>-loaded SVG is opaque to the parent
+              document's styles, so currentColor there resolves to a fixed
+              black regardless of theme, invisible against a dark hover
+              background. */}
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M13 21h8" />
+            <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" />
+          </svg>
         </button>
       )}
     </div>
@@ -885,15 +925,15 @@ function ConnectionLineWithAddButton({ fromX, fromY, toX, toY, fromPosition, toP
       <path
         d={path}
         fill="none"
-        stroke="#414959"
+        stroke="var(--text-secondary)"
         strokeWidth={1.5}
         className="react-flow__connection-path"
         markerEnd="url(#schema-connection-arrow)"
       />
       {!toHandle && (
         <g transform={`translate(${toX + 20}, ${toY - 2})`}>
-          <circle r="8" fill="#ffffff" stroke="#414959" strokeWidth="1.5" />
-          <path d="M-4,0 H4 M0,-4 V4" stroke="#414959" strokeWidth="1.75" strokeLinecap="round" />
+          <circle r="8" fill="var(--bg-panel)" stroke="var(--text-secondary)" strokeWidth="1.5" />
+          <path d="M-4,0 H4 M0,-4 V4" stroke="var(--text-secondary)" strokeWidth="1.75" strokeLinecap="round" />
         </g>
       )}
     </g>
@@ -915,7 +955,7 @@ function SchemaConnectionMarkerDefs() {
             end tangent" -- lets marker-end place a correctly-rotated
             arrowhead with no manual angle/rotate-transform math. */}
         <marker id="schema-connection-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto">
-          <path d="M0,0 L10,5 L0,10 Z" fill="#414959" />
+          <path d="M0,0 L10,5 L0,10 Z" fill="var(--text-secondary)" />
         </marker>
       </defs>
     </svg>
@@ -993,14 +1033,14 @@ function PendingConnectionLineOverlay({
         <path
           d={path}
           fill="none"
-          stroke="#414959"
+          stroke="var(--text-secondary)"
           strokeWidth={1.5}
           className="react-flow__connection-path"
           markerEnd="url(#schema-connection-arrow)"
         />
         <g transform={`translate(${toFlowX + 20}, ${toFlowY - 2})`}>
-          <circle r="8" fill="#ffffff" stroke="#414959" strokeWidth="1.5" />
-          <path d="M-4,0 H4 M0,-4 V4" stroke="#414959" strokeWidth="1.75" strokeLinecap="round" />
+          <circle r="8" fill="var(--bg-panel)" stroke="var(--text-secondary)" strokeWidth="1.5" />
+          <path d="M-4,0 H4 M0,-4 V4" stroke="var(--text-secondary)" strokeWidth="1.75" strokeLinecap="round" />
         </g>
       </g>
     </svg>
@@ -1009,6 +1049,12 @@ function PendingConnectionLineOverlay({
 
 
 interface SchemaViewProps {
+  // Drives <ReactFlow colorMode> -- xyflow's own built-in dark theme (see
+  // node_modules/@xyflow/react/dist/style.css's ".react-flow.dark" block),
+  // which covers the whole canvas (background, edges, minimap, node
+  // chrome, Controls buttons) in one shot rather than needing every one of
+  // those overridden by hand the way rc-dock's bundled CSS did.
+  theme: "light" | "dark";
   rectangles: Rectangle[];
   groups: Group[];
   // Placeholder catalog-widget instances dropped/click-added onto the
@@ -1074,6 +1120,7 @@ interface SchemaViewProps {
 }
 
 export default function SchemaView({
+  theme,
   rectangles,
   groups,
   processorNodes,
@@ -3519,6 +3566,7 @@ export default function SchemaView({
       )}
       <SchemaConnectionMarkerDefs />
       <ReactFlow
+        colorMode={theme}
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
@@ -3529,7 +3577,7 @@ export default function SchemaView({
         // isn't what a "drag to select" gesture should mean here) -- edges
         // are selected only via DeletableEdge's own onClick, through
         // EdgeDeleteContext's onSelectEdge.
-        defaultEdgeOptions={{ style: { strokeWidth: 1.5, stroke: "#414959" }, selectable: false }}
+        defaultEdgeOptions={{ style: { strokeWidth: 1.5, stroke: "var(--text-secondary)" }, selectable: false }}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
@@ -3541,7 +3589,7 @@ export default function SchemaView({
         // reuses xyflow's own built-in `dashdraw` keyframes (see the
         // .react-flow__connection-path rule in App.css) rather than a
         // hand-rolled animation.
-        connectionLineStyle={{ stroke: "#414959", strokeWidth: 1.5 }}
+        connectionLineStyle={{ stroke: "var(--text-secondary)", strokeWidth: 1.5 }}
         // KNIME-style: an arrowhead + "add node" affordance at the drag
         // cursor (see ConnectionLineWithAddButton above), and dropping on
         // empty canvas opens the quick-add picker pre-wired to connect
@@ -3748,7 +3796,7 @@ export default function SchemaView({
           <div className="schema-output-drawer-body nodrag nowheel" style={{ height: drawerHeight }}>
             {selectedTable ? (
               <AgGridReact
-                theme={outputGridTheme}
+                theme={theme === "dark" ? outputGridThemeDark : outputGridThemeLight}
                 rowData={outputRowData ?? []}
                 columnDefs={outputColumnDefs ?? []}
                 defaultColDef={{ ...outputGridDefaultColDef, cellClass: outputRangeCellClass }}
