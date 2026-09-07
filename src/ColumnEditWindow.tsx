@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, memo } from "react";
-import { ConfigProvider, Input } from "antd";
+import { ConfigProvider, Input, theme as antdTheme } from "antd";
 import {
   DndContext,
   closestCenter,
@@ -34,26 +34,25 @@ import "./App.css";
 // window/round-trips-on-Apply pattern as every other Configure window
 // here. See backend/app/nodes.py's column_edit for exactly how each
 // entry resolves.
-const antTheme = {
-  token: {
-    borderRadius: 0,
-    borderRadiusLG: 0,
-    borderRadiusSM: 0,
-    controlHeight: 28,
-    controlHeightSM: 24,
-    fontSize: 13,
-    fontFamily: '"Google Sans Flex", sans-serif',
-    colorBorder: "#e0e0e0",
-    colorPrimaryHover: "#bbb",
-    colorPrimary: "#FE4D41",
-    colorText: "#1a1a1a",
-    colorTextPlaceholder: "#999",
-    colorBgContainer: "#ffffff",
-    motionDurationFast: "0s",
-    motionDurationMid: "0s",
-    motionDurationSlow: "0s",
-  },
-};
+function buildAntTheme(theme: "light" | "dark") {
+  return {
+    algorithm: theme === "dark" ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
+    token: {
+      borderRadius: 0,
+      borderRadiusLG: 0,
+      borderRadiusSM: 0,
+      controlHeight: 28,
+      controlHeightSM: 24,
+      fontSize: 13,
+      fontFamily: '"Google Sans Flex", sans-serif',
+      colorPrimaryHover: "#bbb",
+      colorPrimary: "#FE4D41",
+      motionDurationFast: "0s",
+      motionDurationMid: "0s",
+      motionDurationSlow: "0s",
+    },
+  };
+}
 
 // Ported verbatim from FilterBuilderWindow.tsx's own copy (originally
 // devkit/filter-builder/src/assets/link.svg) -- same empty-state icon
@@ -138,6 +137,10 @@ export default function ColumnEditWindow() {
   const deletedColumnsRef = useRef(deletedColumns);
   useEffect(() => { columnsRef.current = columns; }, [columns]);
   useEffect(() => { deletedColumnsRef.current = deletedColumns; }, [deletedColumns]);
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", payload?.theme ?? "light");
+  }, [payload?.theme]);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -240,7 +243,7 @@ export default function ColumnEditWindow() {
   };
 
   return (
-    <ConfigProvider theme={antTheme}>
+    <ConfigProvider theme={buildAntTheme(payload?.theme ?? "light")}>
       <div className="column-edit-window">
         {showEmpty ? (
           <EmptyState />

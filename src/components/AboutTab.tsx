@@ -26,10 +26,9 @@ const AboutTab: React.FC<AboutTabProps> = ({ systemInfo }) => {
   ];
 
   const links: LinkItem[] = [
-    { label: "Documentation", href: "#" },
-    { label: "Changelog", href: "#" },
-    { label: "Report a Bug", href: "#" },
-    { label: "Contact Support", href: "#" },
+    { label: "Documentation", href: "https://alteradatasuite.com/en/docs" },
+    { label: "Changelog", href: "https://alteradatasuite.com/en/changelog" },
+    { label: "Contact Support", href: "mailto:support@alteradatasuite.com" },
   ];
 
   return (
@@ -65,7 +64,16 @@ const AboutTab: React.FC<AboutTabProps> = ({ systemInfo }) => {
         icon={<LinkOutlined />}
       >
         {links.map((l) => (
-          <a key={l.label} className={styles.linkRow} href={l.href}>
+          <a
+            key={l.label}
+            className={styles.linkRow}
+            href={l.href}
+            onClick={(e) => {
+              if (l.href === "#") return;
+              e.preventDefault();
+              window.alteraStudio.openExternalUrl(l.href);
+            }}
+          >
             <LinkOutlined />
             {l.label}
           </a>

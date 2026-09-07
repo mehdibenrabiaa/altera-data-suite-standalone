@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ConfigProvider, Input } from "antd";
+import { ConfigProvider, Input, theme as antdTheme } from "antd";
 import type { AddColumnParams } from "./types";
 import type { AddColumnWindowPayload } from "./vite-env";
 import {
@@ -38,26 +38,25 @@ import "./App.css";
 // reuses that SAME overlay to find the caret's actual screen position (see
 // formulaHighlight.ts's splitTokensAtCursor), the standard trick for
 // "where is the cursor" in a plain textarea.
-const antTheme = {
-  token: {
-    borderRadius: 0,
-    borderRadiusLG: 0,
-    borderRadiusSM: 0,
-    controlHeight: 28,
-    controlHeightSM: 24,
-    fontSize: 13,
-    fontFamily: '"Google Sans Flex", sans-serif',
-    colorBorder: "#e0e0e0",
-    colorPrimaryHover: "#bbb",
-    colorPrimary: "#FE4D41",
-    colorText: "#1a1a1a",
-    colorTextPlaceholder: "#999",
-    colorBgContainer: "#ffffff",
-    motionDurationFast: "0s",
-    motionDurationMid: "0s",
-    motionDurationSlow: "0s",
-  },
-};
+function buildAntTheme(theme: "light" | "dark") {
+  return {
+    algorithm: theme === "dark" ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
+    token: {
+      borderRadius: 0,
+      borderRadiusLG: 0,
+      borderRadiusSM: 0,
+      controlHeight: 28,
+      controlHeightSM: 24,
+      fontSize: 13,
+      fontFamily: '"Google Sans Flex", sans-serif',
+      colorPrimaryHover: "#bbb",
+      colorPrimary: "#FE4D41",
+      motionDurationFast: "0s",
+      motionDurationMid: "0s",
+      motionDurationSlow: "0s",
+    },
+  };
+}
 
 // Ported verbatim from FilterBuilderWindow.tsx's own copy -- same empty-
 // state icon every Configure/viewer window in the app shares.
@@ -97,6 +96,10 @@ export default function AddColumnWindow() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const highlightRef = useRef<HTMLDivElement>(null);
   const caretMarkerRef = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", payload?.theme ?? "light");
+  }, [payload?.theme]);
 
   useEffect(() => {
     if (!window.alteraStudio) return;
@@ -292,7 +295,7 @@ export default function AddColumnWindow() {
   };
 
   return (
-    <ConfigProvider theme={antTheme}>
+    <ConfigProvider theme={buildAntTheme(payload?.theme ?? "light")}>
       <div className="add-column-window">
         {showEmpty ? (
           <EmptyState />

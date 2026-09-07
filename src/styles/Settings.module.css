@@ -227,10 +227,10 @@ textarea,
   border-left-width: 3px;
 }
 
-.stateBanner--danger  { background: #fdf2f2; border-color: #f3c6c6; border-left-color: #c0392b; }
-.stateBanner--warning { background: #f8f5ee; border-color: #ddd0b3; border-left-color: #b8860b; }
-.stateBanner--success { background: #f2f8f3; border-color: #c6e0c9; border-left-color: #2e7d32; }
-.stateBanner--trial    { background: #fdf6ee; border-color: #e6d2b3; border-left-color: #b8722a; }
+.stateBanner--danger  { background: rgba(192, 57, 43, 0.12); border-color: rgba(192, 57, 43, 0.35); border-left-color: #c0392b; }
+.stateBanner--warning { background: rgba(184, 134, 11, 0.14); border-color: rgba(184, 134, 11, 0.35); border-left-color: #b8860b; }
+.stateBanner--success { background: rgba(46, 125, 50, 0.14); border-color: rgba(46, 125, 50, 0.35); border-left-color: #2e7d32; }
+.stateBanner--trial    { background: rgba(184, 114, 42, 0.14); border-color: rgba(184, 114, 42, 0.35); border-left-color: #b8722a; }
 
 .stateBannerIcon {
   font-size: 26px;
@@ -244,16 +244,16 @@ textarea,
 .stateBannerTitle {
   font-size: 15px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--text-primary);
   margin-bottom: 5px;
 }
 
 .stateBannerDesc {
   font-size: 12px;
-  color: #555555;
+  color: var(--text-secondary);
   line-height: 1.8;
 }
-.stateBannerDesc strong { color: #1a1a1a; }
+.stateBannerDesc strong { color: var(--text-primary); }
 
 /* Flat day-count badge, matches header-promoter's .hp-row-badge */
 .stateBadge {
@@ -267,7 +267,7 @@ textarea,
   font-weight: 600;
   border: 1px solid;
 }
-.stateBadge--urgent { background: #fdf2f2; border-color: #f3c6c6; color: #c0392b; }
+.stateBadge--urgent { background: rgba(192, 57, 43, 0.12); border-color: rgba(192, 57, 43, 0.35); color: #c0392b; }
 .stateBadge--normal { background: var(--bg-panel); border-color: var(--border-color); color: var(--text-secondary); }
 
 /* Secondary notice strip below the hero banner */
@@ -279,9 +279,9 @@ textarea,
   font-size: 12px;
   border-bottom: 1px solid;
 }
-.noticeRow--danger  { background: #fdf2f2; color: #c0392b; border-color: #f3c6c6; }
-.noticeRow--warning { background: #f8f5ee; color: #8a6d1f; border-color: #ddd0b3; }
-.noticeRow--success  { background: #f2f8f3; color: #2e7d32; border-color: #c6e0c9; }
+.noticeRow--danger  { background: rgba(192, 57, 43, 0.12); color: #c0392b; border-color: rgba(192, 57, 43, 0.3); }
+.noticeRow--warning { background: rgba(184, 134, 11, 0.14); color: #b8860b; border-color: rgba(184, 134, 11, 0.3); }
+.noticeRow--success  { background: rgba(46, 125, 50, 0.14); color: #2e7d32; border-color: rgba(46, 125, 50, 0.3); }
 
 /* ── Activation form body ─────────────────────────── */
 .activationBody {

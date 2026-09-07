@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
-import { ConfigProvider, Select, Input, InputNumber } from "antd";
+import { ConfigProvider, Select, Input, InputNumber, theme as antdTheme } from "antd";
 import {
   DndContext,
   closestCenter,
@@ -32,26 +32,25 @@ import "./App.css";
 // ONE source column (so it's a single-column picker + a "New column
 // name" field instead). See backend/app/nodes.py's parse_text for
 // exactly what each operation does and which `params` keys it reads.
-const antTheme = {
-  token: {
-    borderRadius: 0,
-    borderRadiusLG: 0,
-    borderRadiusSM: 0,
-    controlHeight: 28,
-    controlHeightSM: 24,
-    fontSize: 13,
-    fontFamily: '"Google Sans Flex", sans-serif',
-    colorBorder: "#e0e0e0",
-    colorPrimaryHover: "#bbb",
-    colorPrimary: "#FE4D41",
-    colorText: "#1a1a1a",
-    colorTextPlaceholder: "#999",
-    colorBgContainer: "#ffffff",
-    motionDurationFast: "0s",
-    motionDurationMid: "0s",
-    motionDurationSlow: "0s",
-  },
-};
+function buildAntTheme(theme: "light" | "dark") {
+  return {
+    algorithm: theme === "dark" ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
+    token: {
+      borderRadius: 0,
+      borderRadiusLG: 0,
+      borderRadiusSM: 0,
+      controlHeight: 28,
+      controlHeightSM: 24,
+      fontSize: 13,
+      fontFamily: '"Google Sans Flex", sans-serif',
+      colorPrimaryHover: "#bbb",
+      colorPrimary: "#FE4D41",
+      motionDurationFast: "0s",
+      motionDurationMid: "0s",
+      motionDurationSlow: "0s",
+    },
+  };
+}
 
 // Ported verbatim from CleanerWindow.tsx's own copy -- same empty-state
 // icon every Configure/viewer window in the app shares.
@@ -287,6 +286,10 @@ export default function TextParserWindow() {
   );
 
   useEffect(() => {
+    document.documentElement.setAttribute("data-theme", payload?.theme ?? "light");
+  }, [payload?.theme]);
+
+  useEffect(() => {
     if (!window.alteraStudio) return;
     // React 19 StrictMode double-invokes effects in dev -- same race
     // FilterBuilderWindow.tsx guards against (see its own comment).
@@ -362,7 +365,7 @@ export default function TextParserWindow() {
   };
 
   return (
-    <ConfigProvider theme={antTheme}>
+    <ConfigProvider theme={buildAntTheme(payload?.theme ?? "light")}>
       <div className="cleaner-window">
         {showEmpty ? (
           <EmptyState />

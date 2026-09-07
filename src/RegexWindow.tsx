@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ConfigProvider, Input, Select } from "antd";
+import { ConfigProvider, Input, Select, theme as antdTheme } from "antd";
 import { AgGridReact } from "ag-grid-react";
 import { ModuleRegistry, AllCommunityModule, themeQuartz, type ColDef, type GridApi, type ICellRendererParams } from "ag-grid-community";
 import type { RegexParams, RegexMode } from "./types";
@@ -24,26 +24,25 @@ ModuleRegistry.registerModules([AllCommunityModule]);
 // for this live preview; the actual extraction that gets applied always
 // runs authoritatively in Python on Apply (backend/app/nodes.py's
 // extract_regex is the single source of truth for real behavior).
-const antTheme = {
-  token: {
-    borderRadius: 0,
-    borderRadiusLG: 0,
-    borderRadiusSM: 0,
-    controlHeight: 28,
-    controlHeightSM: 24,
-    fontSize: 13,
-    fontFamily: '"Google Sans Flex", sans-serif',
-    colorBorder: "#e0e0e0",
-    colorPrimaryHover: "#bbb",
-    colorPrimary: "#FE4D41",
-    colorText: "#1a1a1a",
-    colorTextPlaceholder: "#999",
-    colorBgContainer: "#ffffff",
-    motionDurationFast: "0s",
-    motionDurationMid: "0s",
-    motionDurationSlow: "0s",
-  },
-};
+function buildAntTheme(theme: "light" | "dark") {
+  return {
+    algorithm: theme === "dark" ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
+    token: {
+      borderRadius: 0,
+      borderRadiusLG: 0,
+      borderRadiusSM: 0,
+      controlHeight: 28,
+      controlHeightSM: 24,
+      fontSize: 13,
+      fontFamily: '"Google Sans Flex", sans-serif',
+      colorPrimaryHover: "#bbb",
+      colorPrimary: "#FE4D41",
+      motionDurationFast: "0s",
+      motionDurationMid: "0s",
+      motionDurationSlow: "0s",
+    },
+  };
+}
 
 // Same theme/params as this app's other Configure/Browse grids
 // (HeaderPromoterWindow.tsx's hpGridTheme, SchemaView.tsx's
@@ -68,6 +67,35 @@ const regexGridTheme = themeQuartz.withParams({
   headerColumnResizeHandleColor: "#cccccc",
   headerColumnResizeHandleHeight: "60%",
   headerColumnResizeHandleWidth: 1,
+  rangeSelectionBorderColor: "#FE4D41",
+  rangeSelectionBackgroundColor: "rgba(254, 77, 65, 0.1)",
+});
+// This window never had dark mode wired at all (no [data-theme], this was
+// the only grid theme that ever existed) -- same fix as BrowseWindow.tsx's
+// browseGridThemeDark.
+const regexGridThemeDark = themeQuartz.withParams({
+  headerBackgroundColor: "#333333",
+  headerTextColor: "#e8e8e8",
+  headerFontSize: 11,
+  headerFontWeight: 600,
+  cellFontSize: 11,
+  fontSize: 11,
+  foregroundColor: "#e8e8e8",
+  borderColor: "#5a5a5a",
+  borderRadius: 0,
+  wrapperBorderRadius: 0,
+  rowHeight: 26,
+  headerHeight: 28,
+  cellHorizontalPadding: 12,
+  spacing: 4,
+  backgroundColor: "#2b2b2b",
+  oddRowBackgroundColor: "#2b2b2b",
+  rowHoverColor: "rgba(254, 77, 65, 0.14)",
+  headerColumnResizeHandleColor: "#5a5a5a",
+  headerColumnResizeHandleHeight: "60%",
+  headerColumnResizeHandleWidth: 1,
+  rangeSelectionBorderColor: "#FE4D41",
+  rangeSelectionBackgroundColor: "rgba(254, 77, 65, 0.18)",
 });
 const regexGridDefaultColDef: ColDef = { resizable: true, sortable: false, suppressMovable: true };
 // Same Community-compatible row-number column as HeaderPromoterWindow.tsx's
@@ -259,6 +287,10 @@ export default function RegexWindow() {
   const gridApiRef = useRef<GridApi | null>(null);
 
   useEffect(() => {
+    document.documentElement.setAttribute("data-theme", payload?.theme ?? "light");
+  }, [payload?.theme]);
+
+  useEffect(() => {
     if (!window.alteraStudio) return;
     // React 19 StrictMode double-invokes effects in dev -- same race
     // FilterBuilderWindow.tsx guards against (see its own comment).
@@ -364,7 +396,7 @@ export default function RegexWindow() {
   };
 
   return (
-    <ConfigProvider theme={antTheme}>
+    <ConfigProvider theme={buildAntTheme(payload?.theme ?? "light")}>
       <div className="regex-window">
         {showEmpty ? (
           <EmptyState />
@@ -426,7 +458,7 @@ export default function RegexWindow() {
             </div>
             <div className="regex-grid-wrap">
               <AgGridReact
-                theme={regexGridTheme}
+                theme={payload?.theme === "dark" ? regexGridThemeDark : regexGridTheme}
                 rowData={rowData}
                 columnDefs={colDefs}
                 defaultColDef={{ ...regexGridDefaultColDef, cellClass: rangeCellClass }}

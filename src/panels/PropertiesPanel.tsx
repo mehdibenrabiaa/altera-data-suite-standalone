@@ -39,11 +39,13 @@ export default function PropertiesPanel({
           Adaptive Engine
           <a
             href="https://alteradatasuite.com/en/docs"
-            target="_blank"
-            rel="noopener noreferrer"
             className="properties-help-btn"
             title="What's the difference between Precision and Adaptive?"
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              window.alteraStudio.openExternalUrl("https://alteradatasuite.com/en/docs");
+            }}
           >
             ?
           </a>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ConfigProvider } from "antd";
+import { ConfigProvider, theme as antdTheme } from "antd";
 import { AgGridReact } from "ag-grid-react";
 import { ModuleRegistry, AllCommunityModule, themeQuartz, type ColDef, type GridApi, type RowClickedEvent } from "ag-grid-community";
 import type { HeaderPromoterParams } from "./types";
@@ -31,6 +31,35 @@ const hpGridTheme = themeQuartz.withParams({
   headerColumnResizeHandleColor: "#cccccc",
   headerColumnResizeHandleHeight: "60%",
   headerColumnResizeHandleWidth: 1,
+  rangeSelectionBorderColor: "#FE4D41",
+  rangeSelectionBackgroundColor: "rgba(254, 77, 65, 0.1)",
+});
+// This window never had dark mode wired at all (no [data-theme], this was
+// the only grid theme that ever existed) -- same fix as BrowseWindow.tsx's
+// browseGridThemeDark.
+const hpGridThemeDark = themeQuartz.withParams({
+  headerBackgroundColor: "#333333",
+  headerTextColor: "#e8e8e8",
+  headerFontSize: 11,
+  headerFontWeight: 600,
+  cellFontSize: 11,
+  fontSize: 11,
+  foregroundColor: "#e8e8e8",
+  borderColor: "#5a5a5a",
+  borderRadius: 0,
+  wrapperBorderRadius: 0,
+  rowHeight: 26,
+  headerHeight: 28,
+  cellHorizontalPadding: 12,
+  spacing: 4,
+  backgroundColor: "#2b2b2b",
+  oddRowBackgroundColor: "#2b2b2b",
+  rowHoverColor: "rgba(254, 77, 65, 0.14)",
+  headerColumnResizeHandleColor: "#5a5a5a",
+  headerColumnResizeHandleHeight: "60%",
+  headerColumnResizeHandleWidth: 1,
+  rangeSelectionBorderColor: "#FE4D41",
+  rangeSelectionBackgroundColor: "rgba(254, 77, 65, 0.18)",
 });
 const hpGridDefaultColDef: ColDef = { resizable: true, sortable: false, suppressMovable: true };
 // Same Community-compatible row-number column as SchemaView.tsx's/
@@ -52,26 +81,25 @@ function makeRowNumberColDef(rowCount: number): ColDef {
   };
 }
 
-const antTheme = {
-  token: {
-    borderRadius: 0,
-    borderRadiusLG: 0,
-    borderRadiusSM: 0,
-    controlHeight: 28,
-    controlHeightSM: 24,
-    fontSize: 13,
-    fontFamily: '"Google Sans Flex", sans-serif',
-    colorBorder: "#e0e0e0",
-    colorPrimaryHover: "#bbb",
-    colorPrimary: "#FE4D41",
-    colorText: "#1a1a1a",
-    colorTextPlaceholder: "#999",
-    colorBgContainer: "#ffffff",
-    motionDurationFast: "0s",
-    motionDurationMid: "0s",
-    motionDurationSlow: "0s",
-  },
-};
+function buildAntTheme(theme: "light" | "dark") {
+  return {
+    algorithm: theme === "dark" ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
+    token: {
+      borderRadius: 0,
+      borderRadiusLG: 0,
+      borderRadiusSM: 0,
+      controlHeight: 28,
+      controlHeightSM: 24,
+      fontSize: 13,
+      fontFamily: '"Google Sans Flex", sans-serif',
+      colorPrimaryHover: "#bbb",
+      colorPrimary: "#FE4D41",
+      motionDurationFast: "0s",
+      motionDurationMid: "0s",
+      motionDurationSlow: "0s",
+    },
+  };
+}
 
 // Dual-track groove toggle -- ported verbatim from devkit/header-promoter/
 // src/GrooveSwitch.tsx (also used elsewhere in the original pdf-converter
@@ -119,6 +147,10 @@ export default function HeaderPromoterWindow() {
   const [rowIndex, setRowIndex] = useState<number | null>(null);
   const [removeAbove, setRemoveAbove] = useState(true);
   const gridApiRef = useRef<GridApi | null>(null);
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", payload?.theme ?? "light");
+  }, [payload?.theme]);
 
   useEffect(() => {
     if (!window.alteraStudio) return;
@@ -193,7 +225,7 @@ export default function HeaderPromoterWindow() {
   };
 
   return (
-    <ConfigProvider theme={antTheme}>
+    <ConfigProvider theme={buildAntTheme(payload?.theme ?? "light")}>
       <div className="header-promoter-window">
         {showEmpty ? (
           <EmptyState />
@@ -216,7 +248,7 @@ export default function HeaderPromoterWindow() {
             </div>
             <div className="hp-grid-wrap">
               <AgGridReact
-                theme={hpGridTheme}
+                theme={payload?.theme === "dark" ? hpGridThemeDark : hpGridTheme}
                 rowData={rowData}
                 columnDefs={colDefs}
                 defaultColDef={hpGridDefaultColDef}

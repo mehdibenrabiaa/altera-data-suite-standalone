@@ -16,6 +16,7 @@ export interface FilterBuilderWindowPayload {
   initialParams: FilterBuilderParams;
   inputColumns: FilterColumnDefinition[];
   extraColumns: FilterExtraColumnDef[];
+  theme: "light" | "dark";
 }
 export interface FilterBuilderAppliedPayload {
   nodeId: string;
@@ -34,6 +35,11 @@ export interface BrowseWindowPayload {
   // Change Type node -- see columnTypeDetection.ts's resolveDisplayColumnType
   // for why the header icon reads this instead of re-guessing from content.
   columnTypes?: Record<string, AppliedColumnType>;
+  // This window is a separate BrowserWindow/document -- it doesn't inherit
+  // the main window's [data-theme] attribute or App.css variables just by
+  // importing App.css, so the main window has to hand it the current theme
+  // explicitly (see SchemaView.tsx's handleOpenBrowse/live-update effect).
+  theme: "light" | "dark";
 }
 
 // Same shape as Browse's own payload (same pure-viewer pattern) -- Summary
@@ -44,6 +50,7 @@ export interface SummaryWindowPayload {
   columns: string[];
   rows: string[][];
   columnTypes?: Record<string, AppliedColumnType>;
+  theme: "light" | "dark";
 }
 
 // Header Promoter's Configure window needs the resolved primary input's
@@ -55,6 +62,7 @@ export interface HeaderPromoterWindowPayload {
   columns: string[];
   rows: string[][];
   initialParams: HeaderPromoterParams;
+  theme: "light" | "dark";
 }
 export interface HeaderPromoterAppliedPayload {
   nodeId: string;
@@ -70,6 +78,7 @@ export interface MergeWindowPayload {
   primaryColumns: string[];
   extraColumns: string[];
   initialParams: MergeParams;
+  theme: "light" | "dark";
 }
 export interface MergeAppliedPayload {
   nodeId: string;
@@ -85,6 +94,7 @@ export interface ShiftColumnsWindowPayload {
   nodeName: string;
   columns: string[];
   initialParams: ShiftColumnsParams;
+  theme: "light" | "dark";
 }
 export interface ShiftColumnsAppliedPayload {
   nodeId: string;
@@ -100,6 +110,7 @@ export interface CleanerWindowPayload {
   nodeName: string;
   columns: string[];
   initialParams: CleanerParams;
+  theme: "light" | "dark";
 }
 export interface CleanerAppliedPayload {
   nodeId: string;
@@ -112,6 +123,7 @@ export interface TextParserWindowPayload {
   nodeName: string;
   columns: string[];
   initialParams: TextParserParams;
+  theme: "light" | "dark";
 }
 export interface TextParserAppliedPayload {
   nodeId: string;
@@ -127,6 +139,7 @@ export interface InputDataWindowPayload {
   nodeId: string;
   nodeName: string;
   initialParams: InputDataParams;
+  theme: "light" | "dark";
 }
 export interface InputDataAppliedPayload {
   nodeId: string;
@@ -141,6 +154,7 @@ export interface SortWindowPayload {
   nodeName: string;
   columns: string[];
   initialParams: SortParams;
+  theme: "light" | "dark";
 }
 export interface SortAppliedPayload {
   nodeId: string;
@@ -151,6 +165,7 @@ export interface AggregateWindowPayload {
   nodeName: string;
   columns: string[];
   initialParams: AggregateParams;
+  theme: "light" | "dark";
 }
 export interface AggregateAppliedPayload {
   nodeId: string;
@@ -167,6 +182,7 @@ export interface UniqueWindowPayload {
   columns: string[];
   rows: string[][];
   initialParams: UniqueParams;
+  theme: "light" | "dark";
 }
 export interface UniqueAppliedPayload {
   nodeId: string;
@@ -182,6 +198,7 @@ export interface ColumnEditWindowPayload {
   nodeName: string;
   columns: string[];
   initialParams: ColumnEditParams;
+  theme: "light" | "dark";
 }
 export interface ColumnEditAppliedPayload {
   nodeId: string;
@@ -198,6 +215,7 @@ export interface ChangeTypeWindowPayload {
   columns: string[];
   rows: string[][];
   initialParams: ChangeTypeParams;
+  theme: "light" | "dark";
 }
 export interface ChangeTypeAppliedPayload {
   nodeId: string;
@@ -216,6 +234,7 @@ export interface RegexWindowPayload {
   columns: string[];
   rows: string[][];
   initialParams: RegexParams;
+  theme: "light" | "dark";
 }
 export interface RegexAppliedPayload {
   nodeId: string;
@@ -232,6 +251,7 @@ export interface CascadeFillWindowPayload {
   columns: string[];
   rows: string[][];
   initialParams: CascadeFillParams;
+  theme: "light" | "dark";
 }
 export interface CascadeFillAppliedPayload {
   nodeId: string;
@@ -250,6 +270,7 @@ export interface ExportWindowPayload {
   nodeName: string;
   tableNames: string[];
   initialParams: ExportParams;
+  theme: "light" | "dark";
 }
 export interface ExportAppliedPayload {
   nodeId: string;
@@ -267,6 +288,7 @@ export interface UnpivotColumnsWindowPayload {
   columns: string[];
   rowCount: number;
   initialParams: UnpivotColumnsParams;
+  theme: "light" | "dark";
 }
 export interface UnpivotColumnsAppliedPayload {
   nodeId: string;
@@ -281,6 +303,7 @@ export interface PivotColumnsWindowPayload {
   nodeName: string;
   columns: string[];
   initialParams: PivotColumnsParams;
+  theme: "light" | "dark";
 }
 export interface PivotColumnsAppliedPayload {
   nodeId: string;
@@ -299,6 +322,7 @@ export interface AddColumnWindowPayload {
   nodeName: string;
   columns: string[];
   initialParams: AddColumnParams;
+  theme: "light" | "dark";
 }
 export interface AddColumnAppliedPayload {
   nodeId: string;
@@ -310,6 +334,7 @@ export interface ConditionalColumnWindowPayload {
   nodeName: string;
   initialParams: ConditionalColumnParams;
   inputColumns: FilterColumnDefinition[];
+  theme: "light" | "dark";
 }
 export interface ConditionalColumnAppliedPayload {
   nodeId: string;

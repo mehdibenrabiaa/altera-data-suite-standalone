@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ConfigProvider, Select } from "antd";
+import { ConfigProvider, Select, theme as antdTheme } from "antd";
 import type { CascadeFillParams, CascadeFillDirection } from "./types";
 import type { CascadeFillWindowPayload } from "./vite-env";
 import "./App.css";
@@ -16,26 +16,25 @@ import "./App.css";
 // Total/Cells-to-fill stat readout (computed client-side, mirroring what
 // backend/app/nodes.py's cascade_fill actually does) covers the same "see
 // the effect before committing" need with far less UI surface.
-const antTheme = {
-  token: {
-    borderRadius: 0,
-    borderRadiusLG: 0,
-    borderRadiusSM: 0,
-    controlHeight: 28,
-    controlHeightSM: 24,
-    fontSize: 13,
-    fontFamily: '"Google Sans Flex", sans-serif',
-    colorBorder: "#e0e0e0",
-    colorPrimaryHover: "#bbb",
-    colorPrimary: "#FE4D41",
-    colorText: "#1a1a1a",
-    colorTextPlaceholder: "#999",
-    colorBgContainer: "#ffffff",
-    motionDurationFast: "0s",
-    motionDurationMid: "0s",
-    motionDurationSlow: "0s",
-  },
-};
+function buildAntTheme(theme: "light" | "dark") {
+  return {
+    algorithm: theme === "dark" ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
+    token: {
+      borderRadius: 0,
+      borderRadiusLG: 0,
+      borderRadiusSM: 0,
+      controlHeight: 28,
+      controlHeightSM: 24,
+      fontSize: 13,
+      fontFamily: '"Google Sans Flex", sans-serif',
+      colorPrimaryHover: "#bbb",
+      colorPrimary: "#FE4D41",
+      motionDurationFast: "0s",
+      motionDurationMid: "0s",
+      motionDurationSlow: "0s",
+    },
+  };
+}
 
 // Ported verbatim from FilterBuilderWindow.tsx's own copy (originally
 // devkit/filter-builder/src/assets/link.svg) -- same empty-state icon
@@ -78,6 +77,10 @@ export default function CascadeFillWindow() {
   const [columns, setColumns] = useState<string[]>([]);
   const [direction, setDirection] = useState<CascadeFillDirection>("down");
   const [customNulls, setCustomNulls] = useState<string[]>([]);
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", payload?.theme ?? "light");
+  }, [payload?.theme]);
 
   useEffect(() => {
     if (!window.alteraStudio) return;
@@ -148,7 +151,7 @@ export default function CascadeFillWindow() {
   };
 
   return (
-    <ConfigProvider theme={antTheme}>
+    <ConfigProvider theme={buildAntTheme(payload?.theme ?? "light")}>
       <div className="cascade-fill-window">
         {showEmpty ? (
           <EmptyState />

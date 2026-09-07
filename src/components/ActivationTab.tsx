@@ -265,7 +265,12 @@ const ActivationTab: React.FC<ActivationTabProps> = ({
 
           <div className={styles.helpText}>
             Don't have a license? Visit our website at{" "}
-            <a href="#">alteradatasuite.com</a>
+            <a
+              href="https://alteradatasuite.com"
+              onClick={(e) => { e.preventDefault(); window.alteraStudio.openExternalUrl("https://alteradatasuite.com"); }}
+            >
+              alteradatasuite.com
+            </a>
           </div>
         </div>
 
@@ -356,7 +361,12 @@ const ActivationTab: React.FC<ActivationTabProps> = ({
 
           <div className={styles.helpText}>
             Need to renew? Visit our website at{" "}
-            <a href="#">alteradatasuite.com</a>
+            <a
+              href="https://alteradatasuite.com"
+              onClick={(e) => { e.preventDefault(); window.alteraStudio.openExternalUrl("https://alteradatasuite.com"); }}
+            >
+              alteradatasuite.com
+            </a>
           </div>
         </div>
 
@@ -530,7 +540,12 @@ const ActivationTab: React.FC<ActivationTabProps> = ({
         )}
         <div className={styles.helpText}>
           No license yet? Visit our website at{" "}
-          <a href="#">alteradatasuite.com</a>
+          <a
+            href="https://alteradatasuite.com"
+            onClick={(e) => { e.preventDefault(); window.alteraStudio.openExternalUrl("https://alteradatasuite.com"); }}
+          >
+            alteradatasuite.com
+          </a>
         </div>
       </div>
 

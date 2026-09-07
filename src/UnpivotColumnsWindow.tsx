@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ConfigProvider } from "antd";
+import { ConfigProvider, theme as antdTheme } from "antd";
 import type { UnpivotColumnsParams } from "./types";
 import type { UnpivotColumnsWindowPayload } from "./vite-env";
 import "./App.css";
@@ -10,26 +10,25 @@ import "./App.css";
 // column stays as an identifier. Same real-window/round-trips-on-Apply
 // pattern as CascadeFillWindow.tsx (a plain checklist + a live stat
 // readout, no grid preview needed).
-const antTheme = {
-  token: {
-    borderRadius: 0,
-    borderRadiusLG: 0,
-    borderRadiusSM: 0,
-    controlHeight: 28,
-    controlHeightSM: 24,
-    fontSize: 13,
-    fontFamily: '"Google Sans Flex", sans-serif',
-    colorBorder: "#e0e0e0",
-    colorPrimaryHover: "#bbb",
-    colorPrimary: "#FE4D41",
-    colorText: "#1a1a1a",
-    colorTextPlaceholder: "#999",
-    colorBgContainer: "#ffffff",
-    motionDurationFast: "0s",
-    motionDurationMid: "0s",
-    motionDurationSlow: "0s",
-  },
-};
+function buildAntTheme(theme: "light" | "dark") {
+  return {
+    algorithm: theme === "dark" ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
+    token: {
+      borderRadius: 0,
+      borderRadiusLG: 0,
+      borderRadiusSM: 0,
+      controlHeight: 28,
+      controlHeightSM: 24,
+      fontSize: 13,
+      fontFamily: '"Google Sans Flex", sans-serif',
+      colorPrimaryHover: "#bbb",
+      colorPrimary: "#FE4D41",
+      motionDurationFast: "0s",
+      motionDurationMid: "0s",
+      motionDurationSlow: "0s",
+    },
+  };
+}
 
 // Ported verbatim from FilterBuilderWindow.tsx's own copy -- same empty-
 // state icon every Configure/viewer window in the app shares.
@@ -55,6 +54,10 @@ function EmptyState() {
 export default function UnpivotColumnsWindow() {
   const [payload, setPayload] = useState<UnpivotColumnsWindowPayload | null>(null);
   const [columns, setColumns] = useState<string[]>([]);
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", payload?.theme ?? "light");
+  }, [payload?.theme]);
 
   useEffect(() => {
     if (!window.alteraStudio) return;
@@ -107,7 +110,7 @@ export default function UnpivotColumnsWindow() {
   };
 
   return (
-    <ConfigProvider theme={antTheme}>
+    <ConfigProvider theme={buildAntTheme(payload?.theme ?? "light")}>
       <div className="unpivot-columns-window">
         {showEmpty ? (
           <EmptyState />

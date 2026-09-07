@@ -209,6 +209,11 @@ const outputGridThemeLight = themeQuartz.withParams({
   headerColumnResizeHandleColor: "#cccccc",
   headerColumnResizeHandleHeight: "60%",
   headerColumnResizeHandleWidth: 1,
+  // Cell/range selection defaults to AG-Grid's own stock blue otherwise --
+  // recolored to the house accent so a selected cell doesn't look like a
+  // different, un-styled component dropped into the app.
+  rangeSelectionBorderColor: "#FE4D41",
+  rangeSelectionBackgroundColor: "rgba(254, 77, 65, 0.1)",
 });
 // Same shape as outputGridThemeLight, values swapped to the app's own dark
 // palette (App.css's [data-theme="dark"] tokens) rather than AG-Grid's own
@@ -222,7 +227,7 @@ const outputGridThemeDark = themeQuartz.withParams({
   cellFontSize: 11,
   fontSize: 11,
   foregroundColor: "#e8e8e8",
-  borderColor: "#454545",
+  borderColor: "#5a5a5a",
   borderRadius: 0,
   wrapperBorderRadius: 0,
   rowHeight: 26,
@@ -235,6 +240,8 @@ const outputGridThemeDark = themeQuartz.withParams({
   headerColumnResizeHandleColor: "#5a5a5a",
   headerColumnResizeHandleHeight: "60%",
   headerColumnResizeHandleWidth: 1,
+  rangeSelectionBorderColor: "#FE4D41",
+  rangeSelectionBackgroundColor: "rgba(254, 77, 65, 0.18)",
 });
 
 // Fully static -- hoisted out of JSX so it's the same object reference on
@@ -2191,9 +2198,10 @@ export default function SchemaView({
       initialParams: (proc.params as FilterBuilderParams | undefined) ?? { groups: [{ id: "group_0", match: "all", conditions: [] }] },
       inputColumns,
       extraColumns: extra ? extra.columns.map((name) => ({ name })) : [],
+      theme,
     });
     closeNodeCtxMenu();
-  }, [processorNodes, resolveNodeInputs, resolveExtraDataInput, closeNodeCtxMenu]);
+  }, [processorNodes, resolveNodeInputs, resolveExtraDataInput, closeNodeCtxMenu, theme]);
 
   // Opens (or focuses/reseeds) the node's Configure window -- same real-
   // window, snapshot-on-open pattern as Filter Builder above. Follows the
@@ -2210,9 +2218,10 @@ export default function SchemaView({
       columns: primary?.columns ?? [],
       rows: primary?.rows ?? [],
       initialParams: (proc.params as HeaderPromoterParams | undefined) ?? { rowIndex: null, removeAbove: true },
+      theme,
     });
     closeNodeCtxMenu();
-  }, [processorNodes, resolveNodeInputs, closeNodeCtxMenu]);
+  }, [processorNodes, resolveNodeInputs, closeNodeCtxMenu, theme]);
 
   // Opens (or focuses/reseeds) the node's Configure window -- same real-
   // window, snapshot-on-open pattern as Filter Builder/Header Promoter
@@ -2231,9 +2240,10 @@ export default function SchemaView({
       primaryColumns: primary?.columns ?? [],
       extraColumns: extra?.columns ?? [],
       initialParams: (proc.params as MergeParams | undefined) ?? { mergeType: "append", matchBy: "attributes", matchColumns: [] },
+      theme,
     });
     closeNodeCtxMenu();
-  }, [processorNodes, resolveNodeInputs, resolveExtraDataInput, closeNodeCtxMenu]);
+  }, [processorNodes, resolveNodeInputs, resolveExtraDataInput, closeNodeCtxMenu, theme]);
 
   // Opens (or focuses/reseeds) the node's Configure window -- same real-
   // window, snapshot-on-open pattern as Filter Builder/Header Promoter/
@@ -2249,9 +2259,10 @@ export default function SchemaView({
       nodeName: proc.name || proc.catalogName,
       columns: primary?.columns ?? [],
       initialParams: (proc.params as ShiftColumnsParams | undefined) ?? { selectedColumns: [], direction: "down", steps: 1 },
+      theme,
     });
     closeNodeCtxMenu();
-  }, [processorNodes, resolveNodeInputs, closeNodeCtxMenu]);
+  }, [processorNodes, resolveNodeInputs, closeNodeCtxMenu, theme]);
 
   // Opens (or focuses/reseeds) the node's Configure window -- same real-
   // window, snapshot-on-open pattern as Filter Builder/Header Promoter/
@@ -2272,9 +2283,10 @@ export default function SchemaView({
       // default group above: needing an extra "+ Add" click every single
       // time before you can configure anything is just busywork.
       initialParams: (proc.params as CleanerParams | undefined) ?? { operations: [{ id: "op_0", columns: [], operation: "replace", params: {} }] },
+      theme,
     });
     closeNodeCtxMenu();
-  }, [processorNodes, resolveNodeInputs, closeNodeCtxMenu]);
+  }, [processorNodes, resolveNodeInputs, closeNodeCtxMenu, theme]);
 
   // Opens (or focuses/reseeds) the node's Configure window -- same real-
   // window, snapshot-on-open pattern as Cleaner above.
@@ -2289,9 +2301,10 @@ export default function SchemaView({
       initialParams: (proc.params as TextParserParams | undefined) ?? {
         operations: [{ id: "op_0", column: primary?.columns[0] ?? "", operation: "text_before", params: {}, newColumnName: "Extracted" }],
       },
+      theme,
     });
     closeNodeCtxMenu();
-  }, [processorNodes, resolveNodeInputs, closeNodeCtxMenu]);
+  }, [processorNodes, resolveNodeInputs, closeNodeCtxMenu, theme]);
 
   // Opens (or focuses/reseeds) the node's Configure window -- same real-
   // window, snapshot-on-open pattern as Cleaner/Text Parser above, minus
@@ -2305,9 +2318,10 @@ export default function SchemaView({
       nodeId: id,
       nodeName: proc.name || proc.catalogName,
       initialParams: (proc.params as InputDataParams | undefined) ?? {},
+      theme,
     });
     closeNodeCtxMenu();
-  }, [processorNodes, closeNodeCtxMenu]);
+  }, [processorNodes, closeNodeCtxMenu, theme]);
 
   // Opens (or focuses/reseeds) the node's Configure window -- same real-
   // window, snapshot-on-open pattern as Text Parser above. A brand-new
@@ -2324,9 +2338,10 @@ export default function SchemaView({
       initialParams: (proc.params as SortParams | undefined) ?? {
         keys: [{ id: "key_0", column: primary?.columns[0] ?? "", direction: "asc" }],
       },
+      theme,
     });
     closeNodeCtxMenu();
-  }, [processorNodes, resolveNodeInputs, closeNodeCtxMenu]);
+  }, [processorNodes, resolveNodeInputs, closeNodeCtxMenu, theme]);
 
   // Opens (or focuses/reseeds) the node's Configure window -- same real-
   // window, snapshot-on-open pattern as Sort above.
@@ -2341,9 +2356,10 @@ export default function SchemaView({
       initialParams: (proc.params as AggregateParams | undefined) ?? {
         metrics: [{ id: "metric_0", column: primary?.columns[0] ?? "", aggregation: "sum" }],
       },
+      theme,
     });
     closeNodeCtxMenu();
-  }, [processorNodes, resolveNodeInputs, closeNodeCtxMenu]);
+  }, [processorNodes, resolveNodeInputs, closeNodeCtxMenu, theme]);
 
   // Opens (or focuses/reseeds) the node's Configure window -- same real-
   // window, snapshot-on-open pattern as the others above. Unlike Shift
@@ -2361,9 +2377,10 @@ export default function SchemaView({
       columns: primary?.columns ?? [],
       rows: primary?.rows ?? [],
       initialParams: (proc.params as UniqueParams | undefined) ?? { columns: [], keep: "first" },
+      theme,
     });
     closeNodeCtxMenu();
-  }, [processorNodes, resolveNodeInputs, closeNodeCtxMenu]);
+  }, [processorNodes, resolveNodeInputs, closeNodeCtxMenu, theme]);
 
   // Opens (or focuses/reseeds) the node's Configure window -- same real-
   // window, snapshot-on-open pattern as the others above. Only needs the
@@ -2377,9 +2394,10 @@ export default function SchemaView({
       nodeName: proc.name || proc.catalogName,
       columns: primary?.columns ?? [],
       initialParams: (proc.params as ColumnEditParams | undefined) ?? { columns: [], deletedColumns: [] },
+      theme,
     });
     closeNodeCtxMenu();
-  }, [processorNodes, resolveNodeInputs, closeNodeCtxMenu]);
+  }, [processorNodes, resolveNodeInputs, closeNodeCtxMenu, theme]);
 
   // Opens (or focuses/reseeds) the node's Configure window -- same real-
   // window, snapshot-on-open pattern as the others above. Needs the
@@ -2396,9 +2414,10 @@ export default function SchemaView({
       columns: primary?.columns ?? [],
       rows: primary?.rows ?? [],
       initialParams: (proc.params as ChangeTypeParams | undefined) ?? { fields: [], fillUnconvertible: false, fallbackValue: "" },
+      theme,
     });
     closeNodeCtxMenu();
-  }, [processorNodes, resolveNodeInputs, closeNodeCtxMenu]);
+  }, [processorNodes, resolveNodeInputs, closeNodeCtxMenu, theme]);
 
   // Opens (or focuses/reseeds) the node's Configure window -- same real-
   // window, snapshot-on-open pattern as the others above. Needs the
@@ -2414,9 +2433,10 @@ export default function SchemaView({
       columns: primary?.columns ?? [],
       rows: primary?.rows ?? [],
       initialParams: (proc.params as CascadeFillParams | undefined) ?? { columns: [], direction: "down", customNulls: [] },
+      theme,
     });
     closeNodeCtxMenu();
-  }, [processorNodes, resolveNodeInputs, closeNodeCtxMenu]);
+  }, [processorNodes, resolveNodeInputs, closeNodeCtxMenu, theme]);
 
   // Opens (or focuses/reseeds) the node's Configure window -- same real-
   // window, snapshot-on-open pattern as the others above. Unlike every
@@ -2432,9 +2452,10 @@ export default function SchemaView({
       nodeName: proc.name || proc.catalogName,
       tableNames: resolveConnectedTableNames(id),
       initialParams: (proc.params as ExportParams | undefined) ?? { format: "xlsx", outputPath: "" },
+      theme,
     });
     closeNodeCtxMenu();
-  }, [processorNodes, resolveConnectedTableNames, closeNodeCtxMenu]);
+  }, [processorNodes, resolveConnectedTableNames, closeNodeCtxMenu, theme]);
 
   // Opens (or focuses/reseeds) the node's Configure window -- same real-
   // window, snapshot-on-open pattern as the others above. Only needs the
@@ -2451,9 +2472,10 @@ export default function SchemaView({
       columns: primary?.columns ?? [],
       rowCount: primary?.rows.length ?? 0,
       initialParams: (proc.params as UnpivotColumnsParams | undefined) ?? { columns: [] },
+      theme,
     });
     closeNodeCtxMenu();
-  }, [processorNodes, resolveNodeInputs, closeNodeCtxMenu]);
+  }, [processorNodes, resolveNodeInputs, closeNodeCtxMenu, theme]);
 
   // Opens (or focuses/reseeds) the node's Configure window -- same real-
   // window, snapshot-on-open pattern as the others above. Only needs the
@@ -2467,9 +2489,10 @@ export default function SchemaView({
       nodeName: proc.name || proc.catalogName,
       columns: primary?.columns ?? [],
       initialParams: (proc.params as PivotColumnsParams | undefined) ?? { labelColumn: "", valueColumn: "" },
+      theme,
     });
     closeNodeCtxMenu();
-  }, [processorNodes, resolveNodeInputs, closeNodeCtxMenu]);
+  }, [processorNodes, resolveNodeInputs, closeNodeCtxMenu, theme]);
 
   // Opens (or focuses/reseeds) the node's Configure window -- same real-
   // window, snapshot-on-open pattern as the others above. Only needs the
@@ -2484,9 +2507,10 @@ export default function SchemaView({
       nodeName: proc.name || proc.catalogName,
       columns: primary?.columns ?? [],
       initialParams: (proc.params as AddColumnParams | undefined) ?? { columnName: "", formula: "" },
+      theme,
     });
     closeNodeCtxMenu();
-  }, [processorNodes, resolveNodeInputs, closeNodeCtxMenu]);
+  }, [processorNodes, resolveNodeInputs, closeNodeCtxMenu, theme]);
 
   // Opens (or focuses/reseeds) the node's Configure window -- same real-
   // window, snapshot-on-open pattern as Filter Builder above, and reuses
@@ -2517,9 +2541,10 @@ export default function SchemaView({
         elseValue: "",
       },
       inputColumns,
+      theme,
     });
     closeNodeCtxMenu();
-  }, [processorNodes, resolveNodeInputs, closeNodeCtxMenu]);
+  }, [processorNodes, resolveNodeInputs, closeNodeCtxMenu, theme]);
 
   // Opens (or focuses/reseeds) the node's Configure window -- same real-
   // window, snapshot-on-open pattern as the others above. Needs the
@@ -2535,9 +2560,10 @@ export default function SchemaView({
       columns: primary?.columns ?? [],
       rows: primary?.rows ?? [],
       initialParams: (proc.params as RegexParams | undefined) ?? { column: "", pattern: "", mode: "smart_extract", literal: false, newColumnName: "Extracted" },
+      theme,
     });
     closeNodeCtxMenu();
-  }, [processorNodes, resolveNodeInputs, closeNodeCtxMenu]);
+  }, [processorNodes, resolveNodeInputs, closeNodeCtxMenu, theme]);
 
   // Which nodes' Browse windows have been opened at least once, if any --
   // see the live-update effect right after handleOpenBrowse below. Each
@@ -2561,13 +2587,14 @@ export default function SchemaView({
       columns: input?.columns ?? [],
       rows: input?.rows ?? [],
       columnTypes: input?.columnTypes,
+      theme,
     });
     // Tracked so the effect below keeps pushing live updates into this
     // node's (now non-modal, so it stays open during normal editing)
     // Browse window, alongside any other node's Browse window also open.
     openBrowseNodeIdsRef.current.add(id);
     closeNodeCtxMenu();
-  }, [processorNodes, resolveBrowseInput, closeNodeCtxMenu]);
+  }, [processorNodes, resolveBrowseInput, closeNodeCtxMenu, theme]);
 
   // Keeps every already-open Browse window's data live instead of frozen
   // at whatever it showed on open -- reported as a real bug otherwise:
@@ -2579,7 +2606,7 @@ export default function SchemaView({
   // node's window has since been closed -- pushBrowseUpdate silently
   // no-ops there (electron/main.ts's pushUpdate only sends to a live,
   // non-destroyed window), and there's no signal back to stop tracking.
-  const lastPushedBrowseInputRef = useRef<Map<string, { columns: string[]; rows: string[][] }>>(new Map());
+  const lastPushedBrowseInputRef = useRef<Map<string, { columns: string[]; rows: string[][]; theme: "light" | "dark" }>>(new Map());
   useEffect(() => {
     openBrowseNodeIdsRef.current.forEach((id) => {
       const proc = processorNodes.find((p) => p.id === id);
@@ -2588,11 +2615,11 @@ export default function SchemaView({
       const columns = input?.columns ?? [];
       const rows = input?.rows ?? [];
       const last = lastPushedBrowseInputRef.current.get(id);
-      if (last && last.columns === columns && last.rows === rows) return;
-      lastPushedBrowseInputRef.current.set(id, { columns, rows });
-      window.alteraStudio.pushBrowseUpdate({ nodeId: id, nodeName: proc.name || proc.catalogName, columns, rows, columnTypes: input?.columnTypes });
+      if (last && last.columns === columns && last.rows === rows && last.theme === theme) return;
+      lastPushedBrowseInputRef.current.set(id, { columns, rows, theme });
+      window.alteraStudio.pushBrowseUpdate({ nodeId: id, nodeName: proc.name || proc.catalogName, columns, rows, columnTypes: input?.columnTypes, theme });
     });
-  }, [processorNodes, resolveBrowseInput]);
+  }, [processorNodes, resolveBrowseInput, theme]);
 
   // Summary -- same pure-viewer pattern as Browse immediately above
   // (resolveBrowseInput's own "requires a real Convert? no, sample-
@@ -2610,12 +2637,13 @@ export default function SchemaView({
       columns: input?.columns ?? [],
       rows: input?.rows ?? [],
       columnTypes: input?.columnTypes,
+      theme,
     });
     openSummaryNodeIdsRef.current.add(id);
     closeNodeCtxMenu();
-  }, [processorNodes, resolveBrowseInput, closeNodeCtxMenu]);
+  }, [processorNodes, resolveBrowseInput, closeNodeCtxMenu, theme]);
 
-  const lastPushedSummaryInputRef = useRef<Map<string, { columns: string[]; rows: string[][] }>>(new Map());
+  const lastPushedSummaryInputRef = useRef<Map<string, { columns: string[]; rows: string[][]; theme: "light" | "dark" }>>(new Map());
   useEffect(() => {
     openSummaryNodeIdsRef.current.forEach((id) => {
       const proc = processorNodes.find((p) => p.id === id);
@@ -2624,11 +2652,11 @@ export default function SchemaView({
       const columns = input?.columns ?? [];
       const rows = input?.rows ?? [];
       const last = lastPushedSummaryInputRef.current.get(id);
-      if (last && last.columns === columns && last.rows === rows) return;
-      lastPushedSummaryInputRef.current.set(id, { columns, rows });
-      window.alteraStudio.pushSummaryUpdate({ nodeId: id, nodeName: proc.name || proc.catalogName, columns, rows, columnTypes: input?.columnTypes });
+      if (last && last.columns === columns && last.rows === rows && last.theme === theme) return;
+      lastPushedSummaryInputRef.current.set(id, { columns, rows, theme });
+      window.alteraStudio.pushSummaryUpdate({ nodeId: id, nodeName: proc.name || proc.catalogName, columns, rows, columnTypes: input?.columnTypes, theme });
     });
-  }, [processorNodes, resolveBrowseInput]);
+  }, [processorNodes, resolveBrowseInput, theme]);
 
   // Single entry point for "open this node's window" (the icon double-
   // click and the context-menu item both go through this), dispatching to

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ConfigProvider } from "antd";
+import { ConfigProvider, theme as antdTheme } from "antd";
 import type { ExportParams, ExportFormat } from "./types";
 import type { ExportWindowPayload } from "./vite-env";
 import "./App.css";
@@ -10,26 +10,25 @@ import "./App.css";
 // and in WHAT FORMAT to write once the node is Run (backend/app/nodes.py's
 // export_data does the actual writing). Same real-window/round-trips-on-
 // Apply pattern as every other node's Configure window.
-const antTheme = {
-  token: {
-    borderRadius: 0,
-    borderRadiusLG: 0,
-    borderRadiusSM: 0,
-    controlHeight: 28,
-    controlHeightSM: 24,
-    fontSize: 13,
-    fontFamily: '"Google Sans Flex", sans-serif',
-    colorBorder: "#e0e0e0",
-    colorPrimaryHover: "#bbb",
-    colorPrimary: "#FE4D41",
-    colorText: "#1a1a1a",
-    colorTextPlaceholder: "#999",
-    colorBgContainer: "#ffffff",
-    motionDurationFast: "0s",
-    motionDurationMid: "0s",
-    motionDurationSlow: "0s",
-  },
-};
+function buildAntTheme(theme: "light" | "dark") {
+  return {
+    algorithm: theme === "dark" ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
+    token: {
+      borderRadius: 0,
+      borderRadiusLG: 0,
+      borderRadiusSM: 0,
+      controlHeight: 28,
+      controlHeightSM: 24,
+      fontSize: 13,
+      fontFamily: '"Google Sans Flex", sans-serif',
+      colorPrimaryHover: "#bbb",
+      colorPrimary: "#FE4D41",
+      motionDurationFast: "0s",
+      motionDurationMid: "0s",
+      motionDurationSlow: "0s",
+    },
+  };
+}
 
 // Ported verbatim from FilterBuilderWindow.tsx's own copy -- same empty-
 // state icon every Configure/viewer window in the app shares.
@@ -62,6 +61,10 @@ export default function ExportWindow() {
   const [format, setFormatState] = useState<ExportFormat>("xlsx");
   const [outputPath, setOutputPath] = useState("");
   const [autosave, setAutosave] = useState(false);
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", payload?.theme ?? "light");
+  }, [payload?.theme]);
 
   useEffect(() => {
     if (!window.alteraStudio) return;
@@ -112,7 +115,7 @@ export default function ExportWindow() {
   };
 
   return (
-    <ConfigProvider theme={antTheme}>
+    <ConfigProvider theme={buildAntTheme(payload?.theme ?? "light")}>
       <div className="export-window">
         {showEmpty ? (
           <EmptyState />

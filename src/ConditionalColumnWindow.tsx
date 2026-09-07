@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ConfigProvider, Select, Input, InputNumber, AutoComplete } from "antd";
+import { ConfigProvider, Select, Input, InputNumber, AutoComplete, theme as antdTheme } from "antd";
 import type { InputRef } from "antd";
 import type { ConditionalColumnClause, ConditionalColumnParams, FilterCondition, FilterConditionValue, FilterGroup, FilterOperator } from "./types";
 import type { ConditionalColumnWindowPayload } from "./vite-env";
@@ -20,27 +20,26 @@ import "./App.css";
 // additions over Filter Builder: each clause has its own output value,
 // clauses are ordered (first match wins, not OR'd together like Filter
 // Builder's groups), and there's a trailing "Otherwise" default.
-const antTheme = {
-  token: {
-    borderRadius: 0,
-    borderRadiusLG: 0,
-    borderRadiusSM: 0,
-    controlHeight: 28,
-    controlHeightSM: 24,
-    fontSize: 13,
-    fontFamily: '"Google Sans Flex", sans-serif',
-    colorBorder: "#e0e0e0",
-    colorPrimaryHover: "#bbb",
-    colorPrimary: "#FE4D41",
-    colorText: "#1a1a1a",
-    colorTextPlaceholder: "#999",
-    colorBgContainer: "#ffffff",
-    paddingSM: 8,
-    motionDurationFast: "0s",
-    motionDurationMid: "0s",
-    motionDurationSlow: "0s",
-  },
-};
+function buildAntTheme(theme: "light" | "dark") {
+  return {
+    algorithm: theme === "dark" ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
+    token: {
+      borderRadius: 0,
+      borderRadiusLG: 0,
+      borderRadiusSM: 0,
+      controlHeight: 28,
+      controlHeightSM: 24,
+      fontSize: 13,
+      fontFamily: '"Google Sans Flex", sans-serif',
+      colorPrimaryHover: "#bbb",
+      colorPrimary: "#FE4D41",
+      paddingSM: 8,
+      motionDurationFast: "0s",
+      motionDurationMid: "0s",
+      motionDurationSlow: "0s",
+    },
+  };
+}
 
 const DEFINITION_OPERATORS: { value: FilterOperator; label: string }[] = [
   { value: "is_defined", label: "Is defined" },
@@ -426,6 +425,10 @@ export default function ConditionalColumnWindow() {
   const conditionCounterRef = useRef(0);
 
   useEffect(() => {
+    document.documentElement.setAttribute("data-theme", payload?.theme ?? "light");
+  }, [payload?.theme]);
+
+  useEffect(() => {
     if (!window.alteraStudio) return;
     // React 19 StrictMode double-invokes effects in dev -- same race
     // FilterBuilderWindow.tsx guards against (see its own comment).
@@ -555,7 +558,7 @@ export default function ConditionalColumnWindow() {
 
   return (
     <ConfigProvider
-      theme={antTheme}
+      theme={buildAntTheme(payload?.theme ?? "light")}
       getPopupContainer={(triggerNode) => (triggerNode?.closest(".filter-builder-window") as HTMLElement) ?? document.body}
     >
       <div className="filter-builder-window">

@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { ConfigProvider, Tabs, Button } from "antd";
+import { ConfigProvider, Tabs, Button, theme as antdTheme } from "antd";
 import "antd/dist/reset.css";
 import "./App.css";
 import PreferencesTab from "./components/PreferencesTab";
@@ -114,12 +114,6 @@ export default function SettingsWindow() {
   // Electron-side wiring is a separate piece of work). ──
   const [appearance, setAppearance] = useState<AppearanceSettings>({
     zoom: 90,
-    fontSize: "medium",
-    compact: false,
-    tooltips: true,
-    autoApply: true,
-    confirmDelete: true,
-    accentColor: "#fd4728",
   });
   const [systemInfo, setSystemInfo] = useState<SystemVersionInfo | null>(null);
   // Only the setter is used -- ActivationTab now owns its own status (it
@@ -144,7 +138,16 @@ export default function SettingsWindow() {
 
   const update = (patch: Partial<SettingsPayload>) => setValues((v) => (v ? { ...v, ...patch } : v));
 
-  const antTheme = { token: { ...ANT_THEME_BASE, ...ANT_THEME_TOKENS[values.theme] } };
+  const antTheme = {
+    // Seed tokens above only patch the colors we hand-picked -- disabled/
+    // hover/etc. states antd derives itself (e.g. the Activate button
+    // greyed out before a key is typed) still used the light-mode formula
+    // regardless, since nothing told antd's derivation algorithm dark mode
+    // was active. darkAlgorithm makes every derived state compute correctly
+    // instead of only the tokens listed explicitly above.
+    algorithm: values.theme === "dark" ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
+    token: { ...ANT_THEME_BASE, ...ANT_THEME_TOKENS[values.theme] },
+  };
 
   const tabItems = [
     {
@@ -155,7 +158,14 @@ export default function SettingsWindow() {
     {
       key: "appearance",
       label: "Appearance",
-      children: <AppearanceTab settings={appearance} onChange={handleAppearanceChange} />,
+      children: (
+        <AppearanceTab
+          settings={appearance}
+          onChange={handleAppearanceChange}
+          theme={values.theme}
+          onThemeChange={(v) => update({ theme: v })}
+        />
+      ),
     },
     {
       key: "activation",

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ConfigProvider, Select, Input, InputNumber, AutoComplete } from "antd";
+import { ConfigProvider, Select, Input, InputNumber, AutoComplete, theme as antdTheme } from "antd";
 import type { FilterBuilderParams, FilterCondition, FilterConditionValue, FilterGroup, FilterOperator } from "./types";
 import type { FilterBuilderWindowPayload, FilterExtraColumnDef } from "./vite-env";
 import "./App.css";
@@ -15,27 +15,31 @@ import "./App.css";
 // notifying on every keystroke (the original's bridge.filterChanged call
 // on every change) -- this app's auto-run only re-fires on Apply, so there
 // was never a need to replicate that live-push wiring or its debouncing.
-const antTheme = {
-  token: {
-    borderRadius: 0,
-    borderRadiusLG: 0,
-    borderRadiusSM: 0,
-    controlHeight: 28,
-    controlHeightSM: 24,
-    fontSize: 13,
-    fontFamily: '"Google Sans Flex", sans-serif',
-    colorBorder: "#e0e0e0",
-    colorPrimaryHover: "#bbb",
-    colorPrimary: "#FE4D41",
-    colorText: "#1a1a1a",
-    colorTextPlaceholder: "#999",
-    colorBgContainer: "#ffffff",
-    paddingSM: 8,
-    motionDurationFast: "0s",
-    motionDurationMid: "0s",
-    motionDurationSlow: "0s",
-  },
-};
+// algorithm/token split, not a static object: this window's own document
+// never gets a [data-theme] attribute from the main window (separate
+// BrowserWindow), and the old hardcoded colorBgContainer/colorText/colorBorder
+// tokens below forced light mode regardless -- darkAlgorithm now derives all
+// of those correctly instead of only the ones someone thought to override.
+function buildAntTheme(theme: "light" | "dark") {
+  return {
+    algorithm: theme === "dark" ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
+    token: {
+      borderRadius: 0,
+      borderRadiusLG: 0,
+      borderRadiusSM: 0,
+      controlHeight: 28,
+      controlHeightSM: 24,
+      fontSize: 13,
+      fontFamily: '"Google Sans Flex", sans-serif',
+      colorPrimaryHover: "#bbb",
+      colorPrimary: "#FE4D41",
+      paddingSM: 8,
+      motionDurationFast: "0s",
+      motionDurationMid: "0s",
+      motionDurationSlow: "0s",
+    },
+  };
+}
 
 const DEFINITION_OPERATORS: { value: FilterOperator; label: string }[] = [
   { value: "is_defined", label: "Is defined" },
@@ -381,6 +385,10 @@ export default function FilterBuilderWindow() {
   const conditionCounterRef = useRef(0);
 
   useEffect(() => {
+    document.documentElement.setAttribute("data-theme", payload?.theme ?? "light");
+  }, [payload?.theme]);
+
+  useEffect(() => {
     if (!window.alteraStudio) return;
     // React 19 StrictMode (see filter-builder-main.tsx) double-invokes
     // effects in dev: mount -> cleanup -> mount again. The FIRST
@@ -508,7 +516,7 @@ export default function FilterBuilderWindow() {
     // table previewer's scrollbar) never reached a long dropdown's own
     // scrollbar: the popup was rendering outside that selector's subtree.
     <ConfigProvider
-      theme={antTheme}
+      theme={buildAntTheme(payload?.theme ?? "light")}
       getPopupContainer={(triggerNode) =>
         (triggerNode?.closest(".filter-builder-window") as HTMLElement) ?? document.body
       }

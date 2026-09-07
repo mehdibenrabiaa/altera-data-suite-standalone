@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ConfigProvider, Select } from "antd";
+import { ConfigProvider, Select, theme as antdTheme } from "antd";
 import type { MergeParams, MergeType, MergeMatchBy, MergeColumnPair } from "./types";
 import type { MergeWindowPayload } from "./vite-env";
 import { computeDefaultMatchPair } from "./mergeDefaults";
@@ -11,26 +11,25 @@ import "./App.css";
 // HeaderPromoterWindow.tsx. See backend/app/nodes.py's merge_data for the
 // actual join logic and why "by Instance ID" (one of Orange's three
 // matching modes) isn't offered here.
-const antTheme = {
-  token: {
-    borderRadius: 0,
-    borderRadiusLG: 0,
-    borderRadiusSM: 0,
-    controlHeight: 28,
-    controlHeightSM: 24,
-    fontSize: 13,
-    fontFamily: '"Google Sans Flex", sans-serif',
-    colorBorder: "#e0e0e0",
-    colorPrimaryHover: "#bbb",
-    colorPrimary: "#FE4D41",
-    colorText: "#1a1a1a",
-    colorTextPlaceholder: "#999",
-    colorBgContainer: "#ffffff",
-    motionDurationFast: "0s",
-    motionDurationMid: "0s",
-    motionDurationSlow: "0s",
-  },
-};
+function buildAntTheme(theme: "light" | "dark") {
+  return {
+    algorithm: theme === "dark" ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
+    token: {
+      borderRadius: 0,
+      borderRadiusLG: 0,
+      borderRadiusSM: 0,
+      controlHeight: 28,
+      controlHeightSM: 24,
+      fontSize: 13,
+      fontFamily: '"Google Sans Flex", sans-serif',
+      colorPrimaryHover: "#bbb",
+      colorPrimary: "#FE4D41",
+      motionDurationFast: "0s",
+      motionDurationMid: "0s",
+      motionDurationSlow: "0s",
+    },
+  };
+}
 
 // Ported verbatim from FilterBuilderWindow.tsx's own copy (originally
 // devkit/filter-builder/src/assets/link.svg) -- same empty-state icon
@@ -81,6 +80,10 @@ export default function MergeWindow() {
   const [matchBy, setMatchBy] = useState<MergeMatchBy>("attributes");
   const [matchColumns, setMatchColumns] = useState<MergeColumnPair[]>([]);
   const pairCounterRef = useRef(0);
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", payload?.theme ?? "light");
+  }, [payload?.theme]);
 
   useEffect(() => {
     if (!window.alteraStudio) return;
@@ -142,7 +145,7 @@ export default function MergeWindow() {
 
   return (
     <ConfigProvider
-      theme={antTheme}
+      theme={buildAntTheme(payload?.theme ?? "light")}
       getPopupContainer={(triggerNode) => (triggerNode?.closest(".merge-window") as HTMLElement) ?? document.body}
     >
       <div className="merge-window">

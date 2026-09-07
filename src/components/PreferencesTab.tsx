@@ -1,6 +1,6 @@
 import React from "react";
 import { Segmented, InputNumber, Typography } from "antd";
-import { ScissorOutlined, ApartmentOutlined, FileImageOutlined, BgColorsOutlined } from "@ant-design/icons";
+import { ScissorOutlined, ApartmentOutlined, FileImageOutlined } from "@ant-design/icons";
 import SectionCard from "./SectionCard";
 import Toggle from "./Toggle";
 import type { SettingsPayload } from "../types";
@@ -18,22 +18,10 @@ interface PreferencesTabProps {
 // page SettingsWindow rendered, just restyled onto the SectionCard/
 // settingRow chrome the rest of these tabs use, for a consistent look.
 const PreferencesTab: React.FC<PreferencesTabProps> = ({ values, onChange }) => {
-  const { sample, schemaSampleRowLimit, schemaPageLimit, autoExpandOutputDrawer, pdfRenderDpi, numPages, theme } = values;
+  const { sample, schemaSampleRowLimit, schemaPageLimit, autoExpandOutputDrawer, pdfRenderDpi, numPages } = values;
 
   return (
     <>
-      <SectionCard title="Theme" icon={<BgColorsOutlined />}>
-        <div className={styles.settingRow}>
-          <Text strong className={styles.settingLabel}>Appearance</Text>
-          <Segmented
-            size="small"
-            options={[{ label: "Light", value: "light" }, { label: "Dark", value: "dark" }]}
-            value={theme}
-            onChange={(v) => onChange({ theme: v as "light" | "dark" })}
-          />
-        </div>
-      </SectionCard>
-
       <SectionCard title="Sample Mode" icon={<ScissorOutlined />}>
         <div className={styles.settingRow}>
           <Text strong className={styles.settingLabel}>Enable</Text>

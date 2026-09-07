@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ConfigProvider, Select } from "antd";
+import { ConfigProvider, Select, theme as antdTheme } from "antd";
 import type { PivotColumnsParams } from "./types";
 import type { PivotColumnsWindowPayload } from "./vite-env";
 import "./App.css";
@@ -12,26 +12,25 @@ import "./App.css";
 // other Configure window here; two plain Select pickers is all this
 // needs (no grid preview, matching Shift Columns/Merge's own simpler
 // pickers), since there's no per-column config beyond which two to pick.
-const antTheme = {
-  token: {
-    borderRadius: 0,
-    borderRadiusLG: 0,
-    borderRadiusSM: 0,
-    controlHeight: 28,
-    controlHeightSM: 24,
-    fontSize: 13,
-    fontFamily: '"Google Sans Flex", sans-serif',
-    colorBorder: "#e0e0e0",
-    colorPrimaryHover: "#bbb",
-    colorPrimary: "#FE4D41",
-    colorText: "#1a1a1a",
-    colorTextPlaceholder: "#999",
-    colorBgContainer: "#ffffff",
-    motionDurationFast: "0s",
-    motionDurationMid: "0s",
-    motionDurationSlow: "0s",
-  },
-};
+function buildAntTheme(theme: "light" | "dark") {
+  return {
+    algorithm: theme === "dark" ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
+    token: {
+      borderRadius: 0,
+      borderRadiusLG: 0,
+      borderRadiusSM: 0,
+      controlHeight: 28,
+      controlHeightSM: 24,
+      fontSize: 13,
+      fontFamily: '"Google Sans Flex", sans-serif',
+      colorPrimaryHover: "#bbb",
+      colorPrimary: "#FE4D41",
+      motionDurationFast: "0s",
+      motionDurationMid: "0s",
+      motionDurationSlow: "0s",
+    },
+  };
+}
 
 // Ported verbatim from FilterBuilderWindow.tsx's own copy -- same empty-
 // state icon every Configure/viewer window in the app shares.
@@ -58,6 +57,10 @@ export default function PivotColumnsWindow() {
   const [payload, setPayload] = useState<PivotColumnsWindowPayload | null>(null);
   const [labelColumn, setLabelColumn] = useState<string | undefined>(undefined);
   const [valueColumn, setValueColumn] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", payload?.theme ?? "light");
+  }, [payload?.theme]);
 
   useEffect(() => {
     if (!window.alteraStudio) return;
@@ -97,7 +100,7 @@ export default function PivotColumnsWindow() {
 
   return (
     <ConfigProvider
-      theme={antTheme}
+      theme={buildAntTheme(payload?.theme ?? "light")}
       getPopupContainer={(triggerNode) => (triggerNode?.closest(".pivot-columns-window") as HTMLElement) ?? document.body}
     >
       <div className="pivot-columns-window">

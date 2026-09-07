@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ConfigProvider } from "antd";
+import { ConfigProvider, theme as antdTheme } from "antd";
 import type { SummaryWindowPayload } from "./vite-env";
 import "./App.css";
 
@@ -10,14 +10,16 @@ import "./App.css";
 // client-side from the already-resolved rows this window's payload
 // carries -- no backend round-trip needed, the same reasoning Browse's
 // own column-type detection already uses.
-const antTheme = {
-  token: {
-    borderRadius: 0,
-    fontSize: 13,
-    fontFamily: '"Google Sans Flex", sans-serif',
-    colorText: "#1a1a1a",
-  },
-};
+function buildAntTheme(theme: "light" | "dark") {
+  return {
+    algorithm: theme === "dark" ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
+    token: {
+      borderRadius: 0,
+      fontSize: 13,
+      fontFamily: '"Google Sans Flex", sans-serif',
+    },
+  };
+}
 
 function LinkIcon() {
   return (
@@ -216,6 +218,10 @@ export default function SummaryWindow() {
   const [payload, setPayload] = useState<SummaryWindowPayload | null>(null);
 
   useEffect(() => {
+    document.documentElement.setAttribute("data-theme", payload?.theme ?? "light");
+  }, [payload?.theme]);
+
+  useEffect(() => {
     if (!window.alteraStudio) return;
     // React 19 StrictMode double-invokes effects in dev -- same race
     // BrowseWindow.tsx guards against (see its own comment).
@@ -257,7 +263,7 @@ export default function SummaryWindow() {
   const showEmpty = payload.columns.length === 0;
 
   return (
-    <ConfigProvider theme={antTheme}>
+    <ConfigProvider theme={buildAntTheme(payload?.theme ?? "light")}>
       <div className="summary-window">
         {showEmpty ? (
           <EmptyState />

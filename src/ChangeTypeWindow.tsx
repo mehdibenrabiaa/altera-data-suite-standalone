@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ConfigProvider, Input, Select } from "antd";
+import { ConfigProvider, Input, Select, theme as antdTheme } from "antd";
 import type { ChangeTypeParams, ChangeTypeTarget, ChangeTypeFieldEntry } from "./types";
 import type { ChangeTypeWindowPayload } from "./vite-env";
 import { detectColumnType as sharedDetectColumnType, DETECTION_SAMPLE_ROWS } from "./columnTypeDetection";
@@ -12,26 +12,25 @@ import "./App.css";
 // like -- no separate "Unchanged" placeholder, same as Alteryx's own
 // Select. See backend/app/nodes.py's change_type for exactly what counts
 // as a successful conversion and how the fill-vs-error policy works.
-const antTheme = {
-  token: {
-    borderRadius: 0,
-    borderRadiusLG: 0,
-    borderRadiusSM: 0,
-    controlHeight: 28,
-    controlHeightSM: 24,
-    fontSize: 13,
-    fontFamily: '"Google Sans Flex", sans-serif',
-    colorBorder: "#e0e0e0",
-    colorPrimaryHover: "#bbb",
-    colorPrimary: "#FE4D41",
-    colorText: "#1a1a1a",
-    colorTextPlaceholder: "#999",
-    colorBgContainer: "#ffffff",
-    motionDurationFast: "0s",
-    motionDurationMid: "0s",
-    motionDurationSlow: "0s",
-  },
-};
+function buildAntTheme(theme: "light" | "dark") {
+  return {
+    algorithm: theme === "dark" ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
+    token: {
+      borderRadius: 0,
+      borderRadiusLG: 0,
+      borderRadiusSM: 0,
+      controlHeight: 28,
+      controlHeightSM: 24,
+      fontSize: 13,
+      fontFamily: '"Google Sans Flex", sans-serif',
+      colorPrimaryHover: "#bbb",
+      colorPrimary: "#FE4D41",
+      motionDurationFast: "0s",
+      motionDurationMid: "0s",
+      motionDurationSlow: "0s",
+    },
+  };
+}
 
 // Ported verbatim from FilterBuilderWindow.tsx's own copy (originally
 // devkit/filter-builder/src/assets/link.svg) -- same empty-state icon
@@ -84,6 +83,10 @@ export default function ChangeTypeWindow() {
   const [fallbackValue, setFallbackValue] = useState("");
 
   useEffect(() => {
+    document.documentElement.setAttribute("data-theme", payload?.theme ?? "light");
+  }, [payload?.theme]);
+
+  useEffect(() => {
     if (!window.alteraStudio) return;
     // React 19 StrictMode double-invokes effects in dev -- same race
     // FilterBuilderWindow.tsx guards against (see its own comment).
@@ -134,7 +137,7 @@ export default function ChangeTypeWindow() {
   };
 
   return (
-    <ConfigProvider theme={antTheme}>
+    <ConfigProvider theme={buildAntTheme(payload?.theme ?? "light")}>
       <div className="change-type-window">
         {showEmpty ? (
           <EmptyState />

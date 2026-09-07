@@ -68,14 +68,19 @@
    form control chrome Chromium itself paints) to switch too. */
 :root {
   color-scheme: light;
-  --bg-panel: #ffffff;
-  --bg-hover: #f0f0f0;
-  --bg-subtle: #f5f5f5;
-  --border-color: #e0e0e0;
-  --border-color-strong: #cccccc;
+  /* Muted, Illustrator/Photoshop-style chrome instead of a flat white
+     expanse -- bg-panel/bg-subtle/bg-hover used to sit only 15 shades
+     apart (255/245/240), so every surface blended into the next with
+     almost no depth cue. Widened so panels actually read as distinct
+     layers, same relative ordering (panel lightest, hover darkest). */
+  --bg-panel: #f5f5f5;
+  --bg-hover: #d8d8d8;
+  --bg-subtle: #e4e4e4;
+  --border-color: #cccccc;
+  --border-color-strong: #a0a0a0;
   --text-primary: #1a1a1a;
-  --text-secondary: #666666;
-  --text-muted: #999999;
+  --text-secondary: #545454;
+  --text-muted: #868686;
 }
 [data-theme="dark"] {
   color-scheme: dark;
@@ -314,8 +319,8 @@ button:focus-visible {
 .groove-switch {
   width: 30px;
   height: 14px;
-  background: #dedede;
-  border: 1px solid #b8b8b8;
+  background: var(--bg-hover);
+  border: 1px solid var(--border-color-strong);
   border-radius: 2px;
   position: relative;
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12);
@@ -342,10 +347,10 @@ button:focus-visible {
   content: "";
   width: 1px;
   height: 6px;
-  background: #b0b0b0;
+  background: var(--text-muted);
 }
 .groove-switch.on {
-  background: #e8e8e8;
+  background: var(--bg-subtle);
 }
 .groove-switch.on .groove-switch-thumb {
   left: 15px;
@@ -637,6 +642,42 @@ button:focus-visible {
   max-height: 12px;
 }
 
+/* Workflow/Schema view's zoom controls are xyflow's own default <Controls>,
+   not this custom canvas-zoom-btn -- forced to the exact same chrome (and
+   overriding xyflow's built-in .react-flow.dark theme for this component)
+   so the two views' zoom-UI stay visually identical instead of drifting
+   apart as each theme evolves independently. */
+.react-flow__controls {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-panel) !important;
+  box-shadow: 0 0 2px 1px rgba(0, 0, 0, 0.08) !important;
+  border-radius: 0 !important;
+  gap: 0 !important;
+}
+.react-flow__controls-button {
+  width: 26px !important;
+  height: 26px !important;
+  padding: 4px !important;
+  border: none !important;
+  border-bottom: 1px solid var(--bg-hover) !important;
+  background: transparent !important;
+  color: var(--text-primary) !important;
+  box-shadow: none !important;
+}
+.react-flow__controls-button:last-child {
+  border-bottom: none !important;
+}
+.react-flow__controls-button:hover {
+  background: var(--bg-hover) !important;
+}
+.react-flow__controls-button svg {
+  fill: currentColor !important;
+  width: 100%;
+  max-width: 12px;
+  max-height: 12px;
+}
+
 /* Table cards -- match the flat Photoshop-style chrome used elsewhere
    (sharp corners, thin border, muted shadow) instead of React Flow's
    rounded-shadow default node look. */
@@ -644,7 +685,7 @@ button:focus-visible {
   position: relative;
   width: 220px;
   background: var(--bg-panel);
-  border: 1px solid #c8c8c8;
+  border: 1px solid var(--border-color-strong);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
   font-size: 12px;
   color: var(--text-primary);
@@ -713,8 +754,14 @@ button:focus-visible {
   width: 100%;
   height: 100%;
   background: rgba(255, 255, 255, 0.5);
-  border: 1.5px solid #c8c8c8;
+  border: 1.5px solid var(--border-color-strong);
   box-sizing: border-box;
+}
+/* Light mode's translucent-white wash reads as a highlighted group area
+   over the light canvas; the same white over a dark canvas just looks like
+   a stray bright rectangle, so dark mode darkens instead of lightens. */
+[data-theme="dark"] .schema-group-box {
+  background: rgba(0, 0, 0, 0.25);
 }
 .schema-group-box-header {
   position: absolute;
@@ -726,7 +773,7 @@ button:focus-visible {
   align-items: center;
   padding: 0 10px;
   background: var(--bg-hover);
-  border: 1.5px solid #c8c8c8;
+  border: 1.5px solid var(--border-color-strong);
   border-bottom: none;
   font-size: 11px;
   font-weight: 600;
@@ -745,7 +792,7 @@ button:focus-visible {
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid #c8c8c8;
+  border: 1px solid var(--border-color-strong);
   border-radius: 5px;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
   transition: filter 0.12s ease;
@@ -867,7 +914,7 @@ button:focus-visible {
   font-weight: 400;
   font-size: 9px;
   line-height: 1.35;
-  color: #8a8f99;
+  color: var(--text-secondary);
   text-align: center;
   white-space: normal;
   word-break: break-word;
@@ -880,7 +927,7 @@ button:focus-visible {
   font-size: 9px;
   line-height: 1.35;
   font-family: inherit;
-  color: #5c6270;
+  color: var(--text-primary);
   text-align: center;
   background: var(--bg-panel);
   border: 1px solid #FE4D41;
@@ -919,7 +966,7 @@ button:focus-visible {
 }
 .schema-processor-node-light circle {
   fill: transparent;
-  stroke: #c8c8c8;
+  stroke: var(--border-color-strong);
   stroke-width: 1;
   vector-effect: non-scaling-stroke;
   transition: fill 0.15s ease, stroke 0.15s ease;
@@ -993,10 +1040,10 @@ button:focus-visible {
   flex-direction: column;
   height: 100vh;
   box-sizing: border-box;
-  background: #f5f5f5;
+  background: var(--bg-subtle);
   font-family: "Google Sans Flex", sans-serif;
   font-size: 13px;
-  color: #1a1a1a;
+  color: var(--text-primary);
 }
 .filter-builder-window *,
 .filter-builder-window *::before,
@@ -1016,15 +1063,15 @@ button:focus-visible {
   height: 8px;
 }
 .filter-builder-window ::-webkit-scrollbar-track {
-  background: #f5f5f5;
+  background: var(--bg-subtle);
 }
 .filter-builder-window ::-webkit-scrollbar-thumb {
-  background: #b8b8b8;
+  background: var(--border-color-strong);
   border-radius: 0;
-  border: 2px solid #f5f5f5;
+  border: 2px solid var(--bg-subtle);
 }
 .filter-builder-window ::-webkit-scrollbar-thumb:hover {
-  background: #949494;
+  background: var(--text-muted);
 }
 /* antd v6 Select/AutoComplete dropdowns virtualize their option list
    (rc-virtual-list) and draw their own JS-positioned scrollbar thumb
@@ -1035,14 +1082,14 @@ button:focus-visible {
    the color is overridden via rc-virtual-list's own CSS var instead
    (cleaner than !important, and it cascades to the :hover state too). */
 .filter-builder-window .ant-select-dropdown-list-scrollbar {
-  background: #f5f5f5;
+  background: var(--bg-subtle);
 }
 .filter-builder-window .ant-select-dropdown-list-scrollbar-thumb {
-  --rc-virtual-list-scrollbar-bg: #b8b8b8;
+  --rc-virtual-list-scrollbar-bg: var(--border-color-strong);
   border-radius: 0 !important;
 }
 .filter-builder-window .ant-select-dropdown-list-scrollbar-thumb:hover {
-  --rc-virtual-list-scrollbar-bg: #949494;
+  --rc-virtual-list-scrollbar-bg: var(--text-muted);
 }
 .filter-builder-window .filter-app {
   max-width: 900px;
@@ -1061,17 +1108,17 @@ button:focus-visible {
   padding: 0 8px;
   font-size: 13px;
   font-family: inherit;
-  color: #1a1a1a;
-  background: #ffffff;
-  border: 1px solid #e0e0e0;
+  color: var(--text-primary);
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
   border-radius: 0;
   outline: none;
   line-height: 1;
   transition: border-color 0.1s;
   width: 100%;
 }
-.filter-builder-window .inp:focus { border-color: #bbb; }
-.filter-builder-window .inp::placeholder { color: #999; }
+.filter-builder-window .inp:focus { border-color: var(--text-muted); }
+.filter-builder-window .inp::placeholder { color: var(--text-muted); }
 
 /* Buttons -- shared with Merge's, Cleaner's, and Column Edit's own
    Configure windows below, same small ghost/icon button look for their
@@ -1089,10 +1136,10 @@ button:focus-visible {
   padding: 0 10px;
   font-size: 13px;
   font-family: inherit;
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--border-color);
   border-radius: 0;
-  background: #ffffff;
-  color: #1a1a1a;
+  background: var(--bg-panel);
+  color: var(--text-primary);
   cursor: pointer;
   white-space: nowrap;
   line-height: 1;
@@ -1101,11 +1148,11 @@ button:focus-visible {
 .filter-builder-window .btn:hover,
 .merge-window .btn:hover,
 .cleaner-window .btn:hover,
-.column-edit-window .btn:hover { border-color: #bbb; background: #f0f0f0; }
+.column-edit-window .btn:hover { border-color: var(--text-muted); background: var(--bg-hover); }
 .filter-builder-window .btn:active,
 .merge-window .btn:active,
 .cleaner-window .btn:active,
-.column-edit-window .btn:active { background: #e8e8e8; }
+.column-edit-window .btn:active { background: var(--bg-subtle); }
 
 .filter-builder-window .btn-ghost,
 .merge-window .btn-ghost,
@@ -1113,25 +1160,25 @@ button:focus-visible {
 .column-edit-window .btn-ghost {
   background: transparent;
   border-color: transparent;
-  color: #999;
+  color: var(--text-muted);
 }
 .filter-builder-window .btn-ghost:hover,
 .merge-window .btn-ghost:hover,
 .cleaner-window .btn-ghost:hover,
-.column-edit-window .btn-ghost:hover { background: #f0f0f0; border-color: #e0e0e0; color: #555; }
+.column-edit-window .btn-ghost:hover { background: var(--bg-hover); border-color: var(--border-color); color: var(--text-secondary); }
 
-.filter-builder-window .btn-danger { color: #c62828; border-color: #f0c0c0; }
-.filter-builder-window .btn-danger:hover { background: #fff4f4; border-color: #c62828; }
+.filter-builder-window .btn-danger { color: #c62828; border-color: rgba(198, 40, 40, 0.35); }
+.filter-builder-window .btn-danger:hover { background: rgba(198, 40, 40, 0.12); border-color: #c62828; }
 
 .filter-builder-window .btn-add-group {
   border-style: dashed;
   color: #FE4D41;
-  border-color: #f5a8a4;
+  border-color: rgba(254, 77, 65, 0.4);
   background: transparent;
   width: 100%;
   height: 32px;
 }
-.filter-builder-window .btn-add-group:hover { background: #fff5f5; border-color: #FE4D41; }
+.filter-builder-window .btn-add-group:hover { background: rgba(254, 77, 65, 0.12); border-color: #FE4D41; }
 
 .filter-builder-window .btn-icon,
 .merge-window .btn-icon,
@@ -1140,8 +1187,8 @@ button:focus-visible {
 
 /* Filter group card */
 .filter-builder-window .filter-group {
-  background: #ffffff;
-  border: 1px solid #e0e0e0;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
   padding: 12px;
   display: flex;
   flex-direction: column;
@@ -1178,7 +1225,7 @@ button:focus-visible {
 .export-window .match-toggle,
 .cleaner-window .match-toggle {
   display: inline-flex;
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--border-color);
   overflow: hidden;
 }
 .filter-builder-window .match-toggle-btn,
@@ -1198,7 +1245,7 @@ button:focus-visible {
   background: transparent;
   border: none;
   cursor: pointer;
-  color: #999;
+  color: var(--text-muted);
   transition: background 0.1s, color 0.1s;
 }
 .filter-builder-window .match-toggle-btn.active,
@@ -1218,7 +1265,7 @@ button:focus-visible {
 .regex-window .match-toggle-btn:not(.active):hover,
 .cascade-fill-window .match-toggle-btn:not(.active):hover,
 .export-window .match-toggle-btn:not(.active):hover,
-.cleaner-window .match-toggle-btn:not(.active):hover { background: #f0f0f0; color: #1a1a1a; }
+.cleaner-window .match-toggle-btn:not(.active):hover { background: var(--bg-hover); color: var(--text-primary); }
 
 /* Filter rows */
 .filter-builder-window .filter-rows { display: flex; flex-direction: column; gap: 6px; }
@@ -1237,7 +1284,7 @@ button:focus-visible {
   align-items: center;
   gap: 5px;
   font-size: 12px;
-  color: #555;
+  color: var(--text-secondary);
   white-space: nowrap;
   flex-shrink: 0;
   cursor: pointer;
@@ -1251,9 +1298,9 @@ button:focus-visible {
 }
 .filter-builder-window .extra-ref-info {
   font-size: 11px;
-  color: #7a5800;
-  background: #fffbe6;
-  border: 1px solid #ffe58f;
+  color: #b8860b;
+  background: rgba(184, 134, 11, 0.14);
+  border: 1px solid rgba(184, 134, 11, 0.35);
   padding: 3px 8px;
 }
 
@@ -1276,8 +1323,8 @@ button:focus-visible {
 .export-window .btn-add-condition:hover { text-decoration: underline; }
 
 /* Final logic bar */
-.filter-builder-window .final-logic { font-size: 12px; color: #999; padding: 2px 0; }
-.filter-builder-window .final-logic strong { color: #555; }
+.filter-builder-window .final-logic { font-size: 12px; color: var(--text-muted); padding: 2px 0; }
+.filter-builder-window .final-logic strong { color: var(--text-secondary); }
 
 /* Add Column (conditional)'s "Then set to" row -- the one addition each
    clause card has beyond Filter Builder's own .filter-group contents. */
@@ -1287,12 +1334,12 @@ button:focus-visible {
   gap: 8px;
   margin-top: 10px;
   padding-top: 10px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--border-color);
 }
 .filter-builder-window .cc-then-label {
   font-size: 12px;
   font-weight: 600;
-  color: #555;
+  color: var(--text-secondary);
   flex-shrink: 0;
 }
 
@@ -1345,7 +1392,7 @@ button:focus-visible {
 .unpivot-columns-window .filter-empty-state h3,
 .pivot-columns-window .filter-empty-state h3,
 .add-column-window .filter-empty-state h3,
-.summary-window .filter-empty-state h3 { margin: 0; font-size: 14px; font-weight: 600; color: #1a1a1a; }
+.summary-window .filter-empty-state h3 { margin: 0; font-size: 14px; font-weight: 600; color: var(--text-primary); }
 .filter-builder-window .filter-empty-state p,
 .header-promoter-window .filter-empty-state p,
 .browse-window .filter-empty-state p,
@@ -1361,7 +1408,7 @@ button:focus-visible {
 .unpivot-columns-window .filter-empty-state p,
 .pivot-columns-window .filter-empty-state p,
 .add-column-window .filter-empty-state p,
-.summary-window .filter-empty-state p { margin: 0; font-size: 13px; color: #555; }
+.summary-window .filter-empty-state p { margin: 0; font-size: 13px; color: var(--text-secondary); }
 
 /* Apply/Cancel footer -- this app's own addition, not part of the ported
    original (see the top-of-file comment on why). Reused as-is by Header
@@ -1372,8 +1419,8 @@ button:focus-visible {
   justify-content: flex-end;
   gap: 8px;
   padding: 10px 16px;
-  border-top: 1px solid #e0e0e0;
-  background: #ffffff;
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-panel);
   box-sizing: border-box;
 }
 .filter-builder-btn-secondary,
@@ -1386,12 +1433,12 @@ button:focus-visible {
   font-family: inherit;
 }
 .filter-builder-btn-secondary {
-  background: #ffffff;
-  border-color: #c8c8c8;
-  color: #333333;
+  background: var(--bg-panel);
+  border-color: var(--border-color-strong);
+  color: var(--text-primary);
 }
 .filter-builder-btn-secondary:hover {
-  border-color: #999999;
+  border-color: var(--text-muted);
 }
 .filter-builder-btn-primary {
   background: #FE4D41;
@@ -1413,7 +1460,7 @@ button:focus-visible {
   flex-direction: column;
   height: 100vh;
   box-sizing: border-box;
-  background: #ffffff;
+  background: var(--bg-subtle);
   font-family: "Google Sans Flex", sans-serif;
 }
 .browse-window .ag-root-wrapper {
@@ -1431,10 +1478,10 @@ button:focus-visible {
   flex-direction: column;
   height: 100vh;
   box-sizing: border-box;
-  background: #f5f5f5;
+  background: var(--bg-subtle);
   font-family: "Google Sans Flex", sans-serif;
   font-size: 13px;
-  color: #1a1a1a;
+  color: var(--text-primary);
 }
 .hp-body {
   flex: 1;
@@ -1447,16 +1494,16 @@ button:focus-visible {
   display: flex;
   flex-direction: column;
   overflow-y: auto;
-  background: #f0f0f0;
-  border-right: 1px solid #e0e0e0;
+  background: var(--bg-hover);
+  border-right: 1px solid var(--border-color-strong);
 }
 .hp-ctrl-section {
   padding: 12px;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--border-color-strong);
 }
 .hp-ctrl-label {
   font-size: 12px;
-  color: #555;
+  color: var(--text-secondary);
   font-weight: 500;
   margin-bottom: 8px;
 }
@@ -1465,20 +1512,20 @@ button:focus-visible {
   align-items: center;
   height: 22px;
   padding: 0 10px;
-  background: #fff3f2;
-  border: 1px solid #f5c0bc;
+  background: rgba(254, 77, 65, 0.12);
+  border: 1px solid rgba(254, 77, 65, 0.35);
   color: #FE4D41;
   font-size: 12px;
   font-weight: 600;
 }
 .hp-ctrl-none {
   font-size: 12px;
-  color: #999;
+  color: var(--text-muted);
 }
 .hp-ctrl-hint {
   padding: 32px 12px 14px;
   font-size: 12px;
-  color: #999;
+  color: var(--text-muted);
   line-height: 1.6;
   text-align: center;
 }
@@ -1490,16 +1537,21 @@ button:focus-visible {
 }
 .hp-switch-label {
   font-size: 12px;
-  color: #555;
+  color: var(--text-secondary);
   font-weight: 500;
 }
-/* Dual-track groove toggle -- verbatim copy from
-   devkit/header-promoter/src/App.css (itself copied from pdf-converter). */
+/* Duplicate of the shared .groove-switch block earlier in this file
+   (originally a verbatim copy from devkit/header-promoter/src/App.css,
+   itself copied from pdf-converter) -- CSS cascade order means THIS later
+   definition was the one actually winning for every .groove-switch in the
+   app (SM/TAG included), silently undoing that earlier block's dark-mode
+   fix. Kept in sync with it rather than removed, since removing it risks
+   depending on declaration order elsewhere. */
 .groove-switch {
   width: 30px;
   height: 14px;
-  background: #dedede;
-  border: 1px solid #b8b8b8;
+  background: var(--bg-hover);
+  border: 1px solid var(--border-color-strong);
   border-radius: 2px;
   position: relative;
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12);
@@ -1513,13 +1565,13 @@ button:focus-visible {
   left: 1px;
   width: 12px;
   height: 10px;
-  background: #ffffff;
-  border: 1px solid #999999;
+  background: var(--bg-panel);
+  border: 1px solid var(--text-muted);
   border-radius: 1px;
   box-shadow: 0 1px 1px rgba(0, 0, 0, 0.1);
   transition: left 0.12s ease, background 0.12s ease, border-color 0.12s ease;
 }
-.groove-switch.on { background: #e8e8e8; }
+.groove-switch.on { background: var(--bg-subtle); }
 .groove-switch.on .groove-switch-thumb {
   left: 15px;
   background: #FE4D41;
@@ -1533,12 +1585,12 @@ button:focus-visible {
   height: 100%;
 }
 .hp-preview-header {
-  background: #fff3f2 !important;
+  background: rgba(254, 77, 65, 0.12) !important;
   color: #FE4D41 !important;
   border-bottom: 2px solid #FE4D41 !important;
   font-weight: 600 !important;
 }
-.hp-selected-row { background-color: #fff3f2 !important; }
+.hp-selected-row { background-color: rgba(254, 77, 65, 0.12) !important; }
 .hp-removed-row { opacity: 0.35 !important; }
 
 /* Merge window -- same outer shell as Filter Builder's own window
@@ -1550,10 +1602,10 @@ button:focus-visible {
   flex-direction: column;
   height: 100vh;
   box-sizing: border-box;
-  background: #f5f5f5;
+  background: var(--bg-subtle);
   font-family: "Google Sans Flex", sans-serif;
   font-size: 13px;
-  color: #1a1a1a;
+  color: var(--text-primary);
 }
 .merge-app-outer {
   flex: 1;
@@ -1573,13 +1625,13 @@ button:focus-visible {
 .merge-section-label {
   font-size: 12px;
   font-weight: 600;
-  color: #555;
+  color: var(--text-secondary);
 }
 /* Same bordered box Filter Builder wraps a whole group in (.filter-group) --
    one container around the 3 radios, not a card per option. */
 .merge-type-group {
-  background: #ffffff;
-  border: 1px solid #e0e0e0;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
   padding: 12px;
   display: flex;
   flex-direction: column;
@@ -1597,13 +1649,13 @@ button:focus-visible {
   flex-shrink: 0;
 }
 .merge-type-option-label { font-size: 13px; }
-.merge-type-option-join { font-size: 11px; color: #999; }
+.merge-type-option-join { font-size: 11px; color: var(--text-muted); }
 .merge-pair-head {
   display: grid;
   grid-template-columns: 1fr 1fr 28px;
   gap: 6px;
   font-size: 11px;
-  color: #999;
+  color: var(--text-muted);
   padding: 0 2px;
 }
 .merge-pair-row {
@@ -1612,7 +1664,7 @@ button:focus-visible {
   gap: 6px;
   align-items: center;
 }
-.merge-hint { margin: 0; font-size: 12px; color: #999; }
+.merge-hint { margin: 0; font-size: 12px; color: var(--text-muted); }
 
 /* Shift Columns window -- same outer shell/section rhythm as Merge's own
    window (.merge-app-outer/.merge-section), just under its own namespace
@@ -1622,10 +1674,10 @@ button:focus-visible {
   flex-direction: column;
   height: 100vh;
   box-sizing: border-box;
-  background: #f5f5f5;
+  background: var(--bg-subtle);
   font-family: "Google Sans Flex", sans-serif;
   font-size: 13px;
-  color: #1a1a1a;
+  color: var(--text-primary);
 }
 .shift-columns-app-outer {
   flex: 1;
@@ -1650,7 +1702,7 @@ button:focus-visible {
 .shift-columns-section-label {
   font-size: 12px;
   font-weight: 600;
-  color: #555;
+  color: var(--text-secondary);
 }
 .shift-columns-clear-btn {
   margin-left: auto;
@@ -1658,17 +1710,17 @@ button:focus-visible {
   background: none;
   padding: 0;
   font-size: 11px;
-  color: #999;
+  color: var(--text-muted);
   cursor: pointer;
   font-family: inherit;
 }
-.shift-columns-clear-btn:hover { color: #555; text-decoration: underline; }
+.shift-columns-clear-btn:hover { color: var(--text-secondary); text-decoration: underline; }
 .shift-columns-list {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  background: #ffffff;
-  border: 1px solid #e0e0e0;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
   padding: 8px 10px;
   max-height: 220px;
   overflow-y: auto;
@@ -1700,7 +1752,7 @@ button:focus-visible {
 .shift-columns-summary {
   margin: 0;
   font-size: 12px;
-  color: #666;
+  color: var(--text-secondary);
   display: inline-flex;
   align-items: center;
   gap: 3px;
@@ -1720,10 +1772,10 @@ button:focus-visible {
   flex-direction: column;
   height: 100vh;
   box-sizing: border-box;
-  background: #f5f5f5;
+  background: var(--bg-subtle);
   font-family: "Google Sans Flex", sans-serif;
   font-size: 13px;
-  color: #1a1a1a;
+  color: var(--text-primary);
 }
 .cleaner-app-outer {
   flex: 1;
@@ -1753,21 +1805,21 @@ button:focus-visible {
 }
 .cleaner-warn-banner {
   font-size: 12px;
-  color: #555;
-  background: #f8f5ee;
-  border: 1px solid #ddd0b3;
+  color: #b8860b;
+  background: rgba(184, 134, 11, 0.14);
+  border: 1px solid rgba(184, 134, 11, 0.35);
   border-left: 3px solid #b8860b;
   padding: 6px 10px;
 }
 .cleaner-op-card {
-  background: #ffffff;
-  border: 1px solid #e0e0e0;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
   padding: 10px 12px;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
-.cleaner-op-card-missing { border-color: #ddc8c8; border-left: 3px solid #c62828; }
+.cleaner-op-card-missing { border-color: rgba(198, 40, 40, 0.35); border-left: 3px solid #c62828; }
 .cleaner-op-grid {
   display: grid;
   grid-template-columns: auto auto 1fr auto;
@@ -1776,7 +1828,7 @@ button:focus-visible {
   align-items: center;
 }
 .cleaner-drag-handle {
-  color: #999;
+  color: var(--text-muted);
   cursor: grab;
   display: flex;
   align-items: center;
@@ -1803,7 +1855,7 @@ button:focus-visible {
 }
 .cleaner-param-label {
   font-size: 12px;
-  color: #555;
+  color: var(--text-secondary);
   font-weight: 600;
   white-space: nowrap;
   width: 88px;
@@ -1837,13 +1889,13 @@ button:focus-visible {
 .cleaner-window .cleaner-btn-add-op {
   border-style: dashed;
   color: #FE4D41;
-  border-color: #f5a8a4;
+  border-color: rgba(254, 77, 65, 0.4);
   background: transparent;
   width: 100%;
   height: 32px;
   margin-top: 2px;
 }
-.cleaner-window .cleaner-btn-add-op:hover { background: #fff5f5; border-color: #FE4D41; }
+.cleaner-window .cleaner-btn-add-op:hover { background: rgba(254, 77, 65, 0.12); border-color: #FE4D41; }
 
 /* Unique window -- same outer shell/section rhythm as the other Configure
    windows (Shift Columns' shape is the closest match: no grid, a plain
@@ -1853,10 +1905,10 @@ button:focus-visible {
   flex-direction: column;
   height: 100vh;
   box-sizing: border-box;
-  background: #f5f5f5;
+  background: var(--bg-subtle);
   font-family: "Google Sans Flex", sans-serif;
   font-size: 13px;
-  color: #1a1a1a;
+  color: var(--text-primary);
 }
 .unique-app-outer {
   flex: 1;
@@ -1898,8 +1950,8 @@ button:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  background: #ffffff;
-  border: 1px solid #e0e0e0;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
   padding: 8px 10px;
   max-height: 220px;
   overflow-y: auto;
@@ -1923,8 +1975,8 @@ button:focus-visible {
   white-space: nowrap;
 }
 .unique-stats {
-  background: #ffffff;
-  border: 1px solid #e0e0e0;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
   padding: 10px 12px;
   display: flex;
   flex-direction: column;
@@ -1936,7 +1988,7 @@ button:focus-visible {
   justify-content: space-between;
   font-size: 12px;
 }
-.unique-stat-label { color: #555; }
+.unique-stat-label { color: var(--text-secondary); }
 .unique-stat-value { font-weight: 600; font-variant-numeric: tabular-nums; }
 
 /* Cascade Fill window -- reuses .unique-*'s section/checklist/stats shell
@@ -1949,10 +2001,10 @@ button:focus-visible {
   flex-direction: column;
   height: 100vh;
   box-sizing: border-box;
-  background: #f5f5f5;
+  background: var(--bg-subtle);
   font-family: "Google Sans Flex", sans-serif;
   font-size: 13px;
-  color: #1a1a1a;
+  color: var(--text-primary);
 }
 
 /* Export window -- same outer shell as Cascade Fill's above, plus its own
@@ -1963,10 +2015,10 @@ button:focus-visible {
   flex-direction: column;
   height: 100vh;
   box-sizing: border-box;
-  background: #f5f5f5;
+  background: var(--bg-subtle);
   font-family: "Google Sans Flex", sans-serif;
   font-size: 13px;
-  color: #1a1a1a;
+  color: var(--text-primary);
 }
 .export-path-row {
   display: flex;
@@ -1976,11 +2028,11 @@ button:focus-visible {
 .export-path-value {
   flex: 1;
   min-width: 0;
-  background: #ffffff;
-  border: 1px solid #e0e0e0;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
   padding: 5px 8px;
   font-size: 12px;
-  color: #555;
+  color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1989,8 +2041,8 @@ button:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  background: #ffffff;
-  border: 1px solid #e0e0e0;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
   padding: 8px 10px;
   max-height: 160px;
   overflow-y: auto;
@@ -2010,10 +2062,10 @@ button:focus-visible {
   flex-direction: column;
   height: 100vh;
   box-sizing: border-box;
-  background: #f5f5f5;
+  background: var(--bg-subtle);
   font-family: "Google Sans Flex", sans-serif;
   font-size: 13px;
-  color: #1a1a1a;
+  color: var(--text-primary);
 }
 
 /* Pivot Columns window -- same outer shell as the others above; two plain
@@ -2023,10 +2075,10 @@ button:focus-visible {
   flex-direction: column;
   height: 100vh;
   box-sizing: border-box;
-  background: #f5f5f5;
+  background: var(--bg-subtle);
   font-family: "Google Sans Flex", sans-serif;
   font-size: 13px;
-  color: #1a1a1a;
+  color: var(--text-primary);
 }
 
 /* Add Column window -- same outer shell as the others above, plus its own
@@ -2036,10 +2088,10 @@ button:focus-visible {
   flex-direction: column;
   height: 100vh;
   box-sizing: border-box;
-  background: #f5f5f5;
+  background: var(--bg-subtle);
   font-family: "Google Sans Flex", sans-serif;
   font-size: 13px;
-  color: #1a1a1a;
+  color: var(--text-primary);
 }
 .add-column-ref-list {
   flex-direction: row;
@@ -2048,19 +2100,19 @@ button:focus-visible {
   max-height: 110px;
 }
 .add-column-ref-item {
-  border: 1px solid #e0e0e0;
-  background: #ffffff;
-  color: #1a1a1a;
+  border: 1px solid var(--border-color);
+  background: var(--bg-panel);
+  color: var(--text-primary);
   font-family: inherit;
   font-size: 12px;
   padding: 3px 9px;
   cursor: pointer;
   border-radius: 999px;
 }
-.add-column-ref-item:hover { background: #f0f0f0; border-color: #ccc; }
+.add-column-ref-item:hover { background: var(--bg-hover); border-color: var(--border-color-strong); }
 .add-column-ref-empty {
   font-size: 12px;
-  color: #999;
+  color: var(--text-muted);
   padding: 3px 0;
 }
 
@@ -2083,8 +2135,8 @@ button:focus-visible {
   height: 96px;
   resize: vertical;
   overflow: hidden;
-  border: 1px solid #e0e0e0;
-  background: #ffffff;
+  border: 1px solid var(--border-color);
+  background: var(--bg-panel);
 }
 .formula-editor-highlight,
 .formula-editor-textarea {
@@ -2102,12 +2154,12 @@ button:focus-visible {
   overflow: auto;
 }
 .formula-editor-highlight {
-  color: #1a1a1a;
+  color: var(--text-primary);
   pointer-events: none;
 }
 .formula-editor-textarea {
   color: transparent;
-  caret-color: #1a1a1a;
+  caret-color: var(--text-primary);
   resize: none;
 }
 /* color here matters, not just background -- the real text underneath is
@@ -2119,10 +2171,13 @@ button:focus-visible {
    tradeoff of the overlay technique itself, not something fixable without
    a real custom-rendered editor. */
 .formula-editor-textarea::selection { background: #add6ff; color: #1a1a1a; }
-.formula-editor-textarea::placeholder { color: #999; -webkit-text-fill-color: #999; }
+.formula-editor-textarea::placeholder { color: var(--text-muted); -webkit-text-fill-color: var(--text-muted); }
 /* Token colors -- VS Code's own Light+ theme palette, so a formula reads
    exactly like real code: [Column] refs as variables (blue), "strings" in
-   brown-red, 123 numbers in green, UPPER(...)-style functions in gold. */
+   brown-red, 123 numbers in green, UPPER(...)-style functions in gold.
+   Dark mode swaps to VS Code's own Dark+ palette below rather than reusing
+   the app's UI text variables -- syntax colors need their own tuned
+   per-token contrast, not one flat foreground color. */
 .formula-token-bracket { color: #001080; }
 .formula-token-string { color: #a31515; }
 .formula-token-number { color: #098658; }
@@ -2130,6 +2185,13 @@ button:focus-visible {
 .formula-token-operator { color: #000000; }
 .formula-token-paren { color: #555555; }
 .formula-token-text { color: #1a1a1a; }
+[data-theme="dark"] .formula-token-bracket { color: #9cdcfe; }
+[data-theme="dark"] .formula-token-string { color: #ce9178; }
+[data-theme="dark"] .formula-token-number { color: #b5cea8; }
+[data-theme="dark"] .formula-token-function { color: #dcdcaa; }
+[data-theme="dark"] .formula-token-operator { color: #d4d4d4; }
+[data-theme="dark"] .formula-token-paren { color: #c8c8c8; }
+[data-theme="dark"] .formula-token-text { color: #d4d4d4; }
 /* Zero-width, but a real inline element -- its own getBoundingClientRect()
    after render is how AddColumnWindow.tsx finds the textarea's actual
    on-screen caret position (see formulaHighlight.ts's splitTokensAtCursor),
@@ -2150,8 +2212,8 @@ button:focus-visible {
 .formula-autocomplete-popup {
   position: fixed;
   z-index: 10000;
-  background: #ffffff;
-  border: 1px solid #c0c0c0;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color-strong);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
   max-height: 160px;
   overflow-y: auto;
@@ -2162,7 +2224,7 @@ button:focus-visible {
 .formula-autocomplete-item {
   padding: 4px 10px;
   cursor: pointer;
-  color: #1a1a1a;
+  color: var(--text-primary);
   white-space: nowrap;
 }
 .formula-autocomplete-item.active {
@@ -2220,10 +2282,10 @@ button:focus-visible {
   flex-direction: column;
   height: 100vh;
   box-sizing: border-box;
-  background: #f5f5f5;
+  background: var(--bg-subtle);
   font-family: "Google Sans Flex", sans-serif;
   font-size: 13px;
-  color: #1a1a1a;
+  color: var(--text-primary);
 }
 .column-edit-app-outer {
   flex: 1;
@@ -2246,8 +2308,8 @@ button:focus-visible {
   color: #555;
 }
 .column-edit-row {
-  background: #ffffff;
-  border: 1px solid #e0e0e0;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
   padding: 8px 10px;
   display: grid;
   grid-template-columns: auto auto 1fr auto;
@@ -2256,7 +2318,7 @@ button:focus-visible {
   margin-bottom: 6px;
 }
 .column-edit-drag-handle {
-  color: #999;
+  color: var(--text-muted);
   cursor: grab;
   display: flex;
   align-items: center;
@@ -2279,8 +2341,8 @@ button:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  background: #ffffff;
-  border: 1px solid #e0e0e0;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
   padding: 4px 10px;
 }
 .column-edit-deleted-row {
@@ -2289,12 +2351,12 @@ button:focus-visible {
   justify-content: space-between;
   gap: 8px;
   padding: 5px 0;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--border-color);
 }
 .column-edit-deleted-row:last-child { border-bottom: none; }
 .column-edit-deleted-name {
   font-size: 13px;
-  color: #555;
+  color: var(--text-secondary);
   text-decoration: line-through;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2321,10 +2383,10 @@ button:focus-visible {
   flex-direction: column;
   height: 100vh;
   box-sizing: border-box;
-  background: #f5f5f5;
+  background: var(--bg-subtle);
   font-family: "Google Sans Flex", sans-serif;
   font-size: 13px;
-  color: #1a1a1a;
+  color: var(--text-primary);
 }
 .change-type-app-outer {
   flex: 1;
@@ -2360,8 +2422,8 @@ button:focus-visible {
 .change-type-field-list {
   display: flex;
   flex-direction: column;
-  background: #ffffff;
-  border: 1px solid #e0e0e0;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
   max-height: 420px;
   overflow-y: auto;
 }
@@ -2371,7 +2433,7 @@ button:focus-visible {
   gap: 8px;
   align-items: center;
   padding: 4px 8px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--border-color);
 }
 .change-type-field-row:last-child { border-bottom: none; }
 .change-type-field-name {
@@ -2392,7 +2454,7 @@ button:focus-visible {
   cursor: pointer;
   flex-shrink: 0;
 }
-.change-type-hint { margin: 0; font-size: 12px; color: #999; line-height: 1.5; }
+.change-type-hint { margin: 0; font-size: 12px; color: var(--text-muted); line-height: 1.5; }
 
 /* Formula box's syntax reference (AddColumnWindow.tsx) -- replaces a
    single dense sentence (column syntax + every operator + all 12
@@ -2413,7 +2475,7 @@ button:focus-visible {
   flex-shrink: 0;
   width: 62px;
   font-size: 11px;
-  color: #999;
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
@@ -2425,9 +2487,9 @@ button:focus-visible {
 .formula-syntax-chip {
   font-family: Consolas, "Courier New", monospace;
   font-size: 11px;
-  color: #555;
-  background: #f0f0f0;
-  border: 1px solid #e0e0e0;
+  color: var(--text-secondary);
+  background: var(--bg-hover);
+  border: 1px solid var(--border-color);
   padding: 1px 6px;
   white-space: nowrap;
 }
@@ -2441,10 +2503,10 @@ button:focus-visible {
   flex-direction: column;
   height: 100vh;
   box-sizing: border-box;
-  background: #f5f5f5;
+  background: var(--bg-subtle);
   font-family: "Google Sans Flex", sans-serif;
   font-size: 13px;
-  color: #1a1a1a;
+  color: var(--text-primary);
 }
 .regex-body {
   flex: 1;
@@ -2459,8 +2521,8 @@ button:focus-visible {
   gap: 16px;
   padding: 12px;
   overflow-y: auto;
-  background: #f0f0f0;
-  border-right: 1px solid #e0e0e0;
+  background: var(--bg-hover);
+  border-right: 1px solid var(--border-color-strong);
 }
 .regex-ctrl-section {
   display: flex;
@@ -2470,7 +2532,7 @@ button:focus-visible {
 .regex-ctrl-label {
   font-size: 12px;
   font-weight: 600;
-  color: #555;
+  color: var(--text-secondary);
 }
 .regex-pattern-input input,
 .regex-pattern-input.ant-input {
@@ -2489,7 +2551,7 @@ button:focus-visible {
   flex-shrink: 0;
 }
 .regex-error { margin: 0; font-size: 12px; color: #c62828; line-height: 1.5; }
-.regex-status { margin: 0; font-size: 12px; color: #555; }
+.regex-status { margin: 0; font-size: 12px; color: var(--text-secondary); }
 .regex-window .regex-mode-toggle {
   display: flex;
   flex-direction: column;
@@ -2500,7 +2562,7 @@ button:focus-visible {
   text-align: left;
   padding: 0 10px;
 }
-.regex-mode-desc { margin: 0; font-size: 11px; color: #999; line-height: 1.5; }
+.regex-mode-desc { margin: 0; font-size: 11px; color: var(--text-muted); line-height: 1.5; }
 .regex-grid-wrap {
   flex: 1;
   min-width: 0;
@@ -3209,18 +3271,18 @@ body.dock-dragging .dock-style-canvas-dock-panel {
 }
 .node-log-entry.error {
   border-left: 3px solid #FE4D41;
-  color: #8a2a24;
-  background: #fdf2f1;
+  color: var(--text-primary);
+  background: rgba(254, 77, 65, 0.12);
 }
 .node-log-entry.warning {
   border-left: 3px solid #b8860b;
-  color: #6b5316;
-  background: #f8f5ee;
+  color: var(--text-primary);
+  background: rgba(184, 134, 11, 0.14);
 }
 .node-log-entry.info {
   border-left: 3px solid #2b7de9;
-  color: #1c4a87;
-  background: #f0f6fe;
+  color: var(--text-primary);
+  background: rgba(43, 125, 233, 0.12);
 }
 
 .properties-panel-body {
@@ -4489,19 +4551,19 @@ body.dock-dragging .dock-style-canvas-dock-panel {
   display: flex;
   justify-content: center;
   align-items: center;
-  color: #444444;
+  color: var(--text-secondary);
   cursor: pointer;
   font-size: 11px;
   padding: 0;
   flex-shrink: 0;
 }
 .ps-icon-btn:hover {
-  background: #e3e3e3;
+  background: var(--bg-hover);
   border-color: var(--text-muted);
-  color: #000000;
+  color: var(--text-primary);
 }
 .ps-icon-btn:active {
-  background: #dcdcdc;
+  background: var(--bg-subtle);
 }
 /* Guide lock/unlock button: same padlock icon in both states (the icon
    represents the object, not the action) — locked-state is communicated by
@@ -4677,7 +4739,7 @@ body.dock-dragging .dock-style-canvas-dock-panel {
   background-color: var(--bg-hover);
 }
 .dock-tabpane .kw-section {
-  padding: 10px 12px;
+  padding: 16px 12px 10px;
 }
 .dock-tabpane .smart-panel-divider {
   margin: 10px 0;
@@ -4738,7 +4800,7 @@ body.dock-dragging .dock-style-canvas-dock-panel {
   gap: 4px;
   align-items: center;
   background: var(--bg-panel);
-  border: 1px solid #b8b8b8;
+  border: 1px solid var(--border-color-strong);
   border-radius: 4px;
   padding: 5px 6px;
   min-height: 32px;
@@ -4750,20 +4812,20 @@ body.dock-dragging .dock-style-canvas-dock-panel {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  background: #e8e8e8;
-  border: 1px solid #bcbcbc;
+  background: var(--bg-hover);
+  border: 1px solid var(--border-color-strong);
   border-radius: 3px;
   padding: 3px 6px 3px 8px;
   font-size: 12px;
-  color: #262626;
+  color: var(--text-primary);
 }
-.kw-tag.open { background: #dedede; border-color: #a3a3a3; color: #171717; }
+.kw-tag.open { background: var(--bg-subtle); border-color: var(--text-muted); color: var(--text-primary); }
 .kw-tag .kw-tag-label { padding-right: 2px; font-weight: 400; }
 .kw-tag button {
   background: none; border: none; cursor: pointer; padding: 0 2px;
   line-height: 1; color: var(--text-secondary); font-size: 12px; display: flex; align-items: center;
 }
-.kw-tag button:hover { color: #111111; }
+.kw-tag button:hover { color: var(--text-primary); }
 .kw-tag.open button.kw-tag-gear, .kw-tag button.kw-tag-gear.has-active { color: var(--primary-color); }
 .kw-input-box input {
   border: none; outline: none; font-size: 12px; flex: 1; min-width: 80px; padding: 2px; background: transparent; color: var(--text-primary);
@@ -4771,30 +4833,30 @@ body.dock-dragging .dock-style-canvas-dock-panel {
 
 .kw-settings {
   margin-top: 8px;
-  border: 1px solid #bcbcbc;
+  border: 1px solid var(--border-color-strong);
   border-radius: 4px;
   padding: 10px;
   background: var(--bg-hover);
 }
 
 .kw-settings-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
-.kw-settings-title { font-size: 12px; font-weight: 400; color: #525252; display: flex; align-items: center; gap: 6px; }
-.kw-settings-title b { color: #111111; font-weight: 400; }
+.kw-settings-title { font-size: 12px; font-weight: 400; color: var(--text-secondary); display: flex; align-items: center; gap: 6px; }
+.kw-settings-title b { color: var(--text-primary); font-weight: 400; }
 
 .rule-row { display: flex; align-items: center; gap: 8px; }
-.rule-label { font-size: 12px; font-weight: 400; color: #404040; }
+.rule-label { font-size: 12px; font-weight: 400; color: var(--text-secondary); }
 .rule-body { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding-left: 30px; margin-top: 6px; }
 
-.mini-switch { width: 30px; height: 16px; border-radius: 8px; background: #bcbcbc; position: relative; cursor: pointer; flex-shrink: 0; transition: background 0.15s; }
+.mini-switch { width: 30px; height: 16px; border-radius: 8px; background: var(--border-color-strong); position: relative; cursor: pointer; flex-shrink: 0; transition: background 0.15s; }
 .mini-switch.on { background: var(--primary-color); }
 .mini-switch .mini-switch-knob { position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: white; transition: left 0.15s; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2); }
 .mini-switch.on .mini-switch-knob { left: 16px; }
 
-.mini-segmented { display: inline-flex; background: #dcdcdc; border-radius: 4px; padding: 2px; gap: 2px; }
+.mini-segmented { display: inline-flex; background: var(--bg-hover); border-radius: 4px; padding: 2px; gap: 2px; }
 .mini-segmented button {
   border: none; background: transparent; font-size: 12px; padding: 3px 9px; border-radius: 3px; cursor: pointer; color: var(--text-secondary); font-weight: 400;
 }
-.mini-segmented button.active { background: var(--bg-panel); color: #111111; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08); font-weight: 400; }
+.mini-segmented button.active { background: var(--bg-panel); color: var(--text-primary); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08); font-weight: 400; }
 
 .smart-dash { font-size: 12px; color: #888888; }
 .smart-hint { font-size: 12px; color: #888888; cursor: help; }
@@ -4804,17 +4866,17 @@ body.dock-dragging .dock-style-canvas-dock-panel {
   grid-template-columns: repeat(3, 30px);
   grid-template-rows: repeat(3, 38px);
   gap: 3px;
-  border: 1px solid #bcbcbc;
+  border: 1px solid var(--border-color-strong);
   border-radius: 4px;
   padding: 3px;
-  background: #dcdcdc;
+  background: var(--bg-hover);
 }
 .section-cell {
   width: 30px; height: 38px; border-radius: 0; cursor: pointer;
   background: var(--bg-subtle); border: 1px solid transparent; transition: background 0.1s;
 }
-.section-cell:hover { background: #eaeaea; }
-.section-cell.selected { background: #ffe0d6; border-color: #f3b7a6; }
+.section-cell:hover { background: var(--bg-hover); }
+.section-cell.selected { background: rgba(254, 77, 65, 0.18); border-color: #FE4D41; }
 
 .offset-section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 
@@ -4829,7 +4891,7 @@ body.dock-dragging .dock-style-canvas-dock-panel {
 .offset-grid .offset-cell { display: flex; align-items: center; justify-content: center; }
 .offset-cell.top { flex-direction: column; justify-content: flex-end; gap: 2px; padding-bottom: 2px; }
 .offset-cell.bottom { flex-direction: column; justify-content: flex-start; gap: 2px; padding-top: 2px; }
-.offset-cell.left { flex-direction: row; justify-content: flex-start; gap: 6px; }
+.offset-cell.left { flex-direction: row; justify-content: flex-end; gap: 6px; }
 .offset-cell.right { flex-direction: row; justify-content: flex-start; gap: 6px; }
 
 .offset-cell .offset-val { font-size: 12px; color: var(--primary-color); line-height: 1; font-weight: 400; }
@@ -4838,9 +4900,9 @@ body.dock-dragging .dock-style-canvas-dock-panel {
 .knob-svg:active { cursor: grabbing; }
 
 .offset-reset-btn {
-  width: 28px; height: 28px; border-radius: 50%; border: 1px solid #bcbcbc;
+  width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--border-color-strong);
   background: var(--bg-panel); cursor: not-allowed; display: flex; align-items: center; justify-content: center;
-  font-size: 12px; color: #bcbcbc; transition: 0.15s;
+  font-size: 12px; color: var(--text-muted); transition: 0.15s;
 }
 .offset-reset-btn.active { background: #fef3c7; color: #d97706; cursor: pointer; border-color: #fde68a; }
 .offset-reset-btn.active:hover { background: #fde68a; }
@@ -4853,7 +4915,7 @@ body.dock-dragging .dock-style-canvas-dock-panel {
 }
 .smart-run-btn:hover:not(:disabled) { background: #e03b2f; }
 .smart-run-btn:active:not(:disabled) { background: #c73227; }
-.smart-run-btn:disabled { background: #e2e8f0; color: #94a3b8; border-color: #cbd5e1; cursor: not-allowed; box-shadow: none; }
+.smart-run-btn:disabled { background: var(--bg-hover); color: var(--text-muted); border-color: var(--border-color-strong); cursor: not-allowed; box-shadow: none; }
 
 .smart-spinner {
   width: 12px; height: 12px; border: 2px solid rgba(255, 255, 255, 0.4); border-top-color: white;
@@ -5041,16 +5103,16 @@ body.dock-dragging .dock-style-canvas-dock-panel {
 .smart-results {
   display: flex;
   flex-direction: column;
-  background: #efefef;
-  border: 1px solid #d0d0d0;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-color-strong);
   border-radius: 4px;
   padding: 8px 10px;
   gap: 4px;
   margin-top: 4px;
 }
-.smart-status-row { display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: #444444; }
-.smart-status-row + .smart-status-row { border-top: 1px solid #e2e2e2; padding-top: 4px; margin-top: 2px; }
-.smart-status-row .highlight { font-weight: 400; color: #111111; display: flex; align-items: center; }
+.smart-status-row { display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: var(--text-secondary); }
+.smart-status-row + .smart-status-row { border-top: 1px solid var(--border-color); padding-top: 4px; margin-top: 2px; }
+.smart-status-row .highlight { font-weight: 400; color: var(--text-primary); display: flex; align-items: center; }
 .smart-status-row .subtle-info { color: var(--text-secondary); font-size: 10px; font-weight: 400; }
 
 /* Ensure dropdown positioning works correctly */
@@ -5179,7 +5241,7 @@ body.dock-dragging .dock-style-canvas-dock-panel {
 
 .drop-zone-modal {
   pointer-events: auto;
-  background: var(--bg-hover);
+  background: var(--bg-panel);
   border: 1px solid var(--border-color-strong);
   border-radius: 3px;
   width: 420px;

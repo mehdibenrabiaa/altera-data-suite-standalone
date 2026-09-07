@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ConfigProvider } from "antd";
+import { ConfigProvider, theme as antdTheme } from "antd";
 import { AgGridReact } from "ag-grid-react";
 import { ModuleRegistry, AllCommunityModule, themeQuartz, type ColDef } from "ag-grid-community";
 import type { BrowseWindowPayload } from "./vite-env";
@@ -34,6 +34,37 @@ const browseGridTheme = themeQuartz.withParams({
   headerColumnResizeHandleColor: "#cccccc",
   headerColumnResizeHandleHeight: "60%",
   headerColumnResizeHandleWidth: 1,
+  rangeSelectionBorderColor: "#FE4D41",
+  rangeSelectionBackgroundColor: "rgba(254, 77, 65, 0.1)",
+});
+// This window is a standalone BrowserWindow -- it never picked up dark mode
+// at all (no [data-theme] wiring, this grid theme was the only one that
+// ever existed), so the whole window stayed light regardless of the main
+// window's theme. Same shape as SchemaView.tsx's outputGridThemeDark,
+// values matched to App.css's [data-theme="dark"] tokens.
+const browseGridThemeDark = themeQuartz.withParams({
+  headerBackgroundColor: "#333333",
+  headerTextColor: "#e8e8e8",
+  headerFontSize: 11,
+  headerFontWeight: 600,
+  cellFontSize: 11,
+  fontSize: 11,
+  foregroundColor: "#e8e8e8",
+  borderColor: "#5a5a5a",
+  borderRadius: 0,
+  wrapperBorderRadius: 0,
+  rowHeight: 26,
+  headerHeight: 28,
+  cellHorizontalPadding: 12,
+  spacing: 4,
+  backgroundColor: "#2b2b2b",
+  oddRowBackgroundColor: "#2b2b2b",
+  rowHoverColor: "rgba(254, 77, 65, 0.14)",
+  headerColumnResizeHandleColor: "#5a5a5a",
+  headerColumnResizeHandleHeight: "60%",
+  headerColumnResizeHandleWidth: 1,
+  rangeSelectionBorderColor: "#FE4D41",
+  rangeSelectionBackgroundColor: "rgba(254, 77, 65, 0.18)",
 });
 const browseGridDefaultColDef: ColDef = { resizable: true, sortable: false, suppressMovable: true };
 // AG-Grid's own Excel-style row-number column (the `rowNumbers` grid
@@ -58,15 +89,6 @@ function makeRowNumberColDef(rowCount: number): ColDef {
     valueGetter: (params) => (params.node?.rowIndex ?? -1) + 1,
   };
 }
-
-const antTheme = {
-  token: {
-    borderRadius: 0,
-    fontSize: 13,
-    fontFamily: '"Google Sans Flex", sans-serif',
-    colorText: "#1a1a1a",
-  },
-};
 
 // Same empty state as FilterBuilderWindow.tsx/HeaderPromoterWindow.tsx
 // (ported from devkit/filter-builder's own link.svg) -- this window used
@@ -101,6 +123,13 @@ function EmptyState() {
 export default function BrowseWindow() {
   const [payload, setPayload] = useState<BrowseWindowPayload | null>(null);
   const { onCellKeyDown, onCellContextMenu, suppressContextMenu, contextMenu, onGridReady, onCellMouseDown, onCellMouseOver, rangeCellClass } = useGridCellCopy();
+
+  // Drives every [data-theme="dark"] override in App.css -- this window
+  // doesn't inherit the main window's <html> attribute (separate document),
+  // so it has to be set here too, same as SettingsWindow.tsx.
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", payload?.theme ?? "light");
+  }, [payload?.theme]);
 
   useEffect(() => {
     if (!window.alteraStudio) return;
@@ -169,15 +198,25 @@ export default function BrowseWindow() {
     ? payload.rows.map((row) => Object.fromEntries(payload.columns.map((col, ci) => [col, row[ci] ?? ""])))
     : [];
   const showEmpty = !payload || payload.columns.length === 0;
+  const isDark = payload?.theme === "dark";
 
   return (
-    <ConfigProvider theme={antTheme}>
+    <ConfigProvider
+      theme={{
+        algorithm: isDark ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
+        token: {
+          borderRadius: 0,
+          fontSize: 13,
+          fontFamily: '"Google Sans Flex", sans-serif',
+        },
+      }}
+    >
       <div className="browse-window">
         {showEmpty ? (
           <EmptyState />
         ) : (
           <AgGridReact
-            theme={browseGridTheme}
+            theme={isDark ? browseGridThemeDark : browseGridTheme}
             rowData={rowData}
             columnDefs={columnDefs}
             defaultColDef={{ ...browseGridDefaultColDef, cellClass: rangeCellClass }}

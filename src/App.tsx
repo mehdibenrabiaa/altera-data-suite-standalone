@@ -19,7 +19,7 @@ import {
 } from "react-konva";
 import * as pdfjsLib from "pdfjs-dist";
 import { addEdge, applyEdgeChanges, reconnectEdge, type Edge, type Connection, type EdgeChange } from "@xyflow/react";
-import { ConfigProvider, Spin, InputNumber } from "antd";
+import { ConfigProvider, Spin, InputNumber, theme as antdTheme } from "antd";
 import "antd/dist/reset.css";
 import "./App.css";
 
@@ -191,9 +191,9 @@ const ScrollKnob: React.FC<{
   };
 
   const isSet = value !== 0;
-  const fill = active ? "#FE4D41" : isSet ? "#f0f0f0" : "#ffffff";
-  const strokeC = active ? "#e03b2f" : isSet ? "#FE4D41" : "#bcbcbc";
-  const ridgeClr = isSet ? "#FE4D41" : "#888888";
+  const fill = active ? "#FE4D41" : isSet ? "var(--bg-hover)" : "var(--bg-panel)";
+  const strokeC = active ? "#e03b2f" : isSet ? "#FE4D41" : "var(--border-color-strong)";
+  const ridgeClr = isSet ? "#FE4D41" : "var(--text-muted)";
   const ridges = [-4, -1.3, 1.3, 4];
 
   return (
@@ -384,7 +384,7 @@ const SmartPanel = React.memo(function SmartPanel({ rect, isRunning, pageMatchCo
                       value={occ.action}
                       onChange={(v) => setKwSettings(activeKw, { ...ks, occRule: { ...occ, action: v as "keep" | "ignore" } })}
                     />
-                    <span style={{ fontSize: 11, color: "#666" }}>occ.</span>
+                    <span style={{ fontSize: 11, color: "var(--text-secondary)" }}>occ.</span>
                     <InputNumber
                       size="small" min={1} value={occ.from} style={{ width: 65 }}
                       onChange={(v) => {
@@ -3740,6 +3740,12 @@ const KonvaA4Editor = () => {
   return (
     <ConfigProvider
       theme={{
+        // Same gap as SettingsWindow.tsx's ConfigProvider -- antd only ever
+        // rendered its own light-mode derivation regardless of this app's
+        // dark theme (nothing here told antd dark mode was active), so
+        // every antd control (InputNumber, etc.) stayed white no matter what
+        // App.css's [data-theme="dark"] vars did elsewhere.
+        algorithm: theme === "dark" ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
         token: {
           colorPrimary: "#FE4D41",
           borderRadius: 8,

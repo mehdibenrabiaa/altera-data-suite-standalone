@@ -746,11 +746,11 @@ ipcMain.on("app:restart", () => {
 });
 
 // Help menu's About/Docs links -- opens in the user's default browser
-// rather than navigating this window. Restricted to http(s) so a
+// rather than navigating this window. Restricted to http(s)/mailto so a
 // compromised renderer can't use this to launch an arbitrary local
 // file/protocol handler.
 ipcMain.on("shell:openExternal", (_event, url: string) => {
-  if (/^https?:\/\//i.test(url)) shell.openExternal(url);
+  if (/^(https?:\/\/|mailto:)/i.test(url)) shell.openExternal(url);
 });
 
 app.whenReady().then(() => {

@@ -4,12 +4,6 @@
 // mostly-demo surface ported wholesale from devkit/settings.
 export interface AppearanceSettings {
   zoom: number;
-  fontSize: "small" | "medium" | "large";
-  compact: boolean;
-  tooltips: boolean;
-  autoApply: boolean;
-  confirmDelete: boolean;
-  accentColor: string;
 }
 
 // email/plan/expiry are optional on every state -- the real backend's JWT
