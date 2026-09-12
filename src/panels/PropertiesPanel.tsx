@@ -1,5 +1,6 @@
 import type { Dispatch, SetStateAction } from "react";
-import type { Rectangle, Group } from "../types";
+import { InputNumber } from "antd";
+import type { CamelotSettings, Rectangle, Group } from "../types";
 import { fillToHex } from "../colorUtils";
 import GrooveSwitch from "../components/GrooveSwitch";
 
@@ -28,8 +29,15 @@ export default function PropertiesPanel({
 
   const rect = singleSelectedRect;
   const adaptive = rect.autoDetectColumns === true;
+  const camelotSettings = rect.camelotSettings ?? {};
+  const engineMode = camelotSettings.engineMode ?? "flow";
   const groupName = groups.find(g => g.id === rect.groupId)?.name ?? "None";
   const colorHex = fillToHex(rect.fill);
+  const updateCamelotSettings = (changes: CamelotSettings) => {
+    setRectangles(prev => prev.map(r => r.id === rect.id
+      ? { ...r, camelotSettings: { ...r.camelotSettings, ...changes } }
+      : r));
+  };
 
   return (
     <div className="properties-panel-body">
@@ -59,6 +67,61 @@ export default function PropertiesPanel({
                 r.id === rect.id ? { ...r, autoDetectColumns: checked } : r
               ));
             }}
+          />
+        </div>
+      </div>
+
+      <div className={`properties-tuning-box${adaptive ? "" : " disabled"}`} aria-disabled={!adaptive}>
+        <div className="properties-tuning-heading">Adaptive Engine tuning</div>
+        <div className="properties-info-row">
+          <span className="properties-info-label">Extraction mode</span>
+          <div className="properties-mode-toggle" role="group" aria-label="Adaptive Engine extraction mode">
+            <button type="button" className={engineMode === "flow" ? "active" : ""} disabled={!adaptive} onClick={() => updateCamelotSettings({ engineMode: "flow" })} title="Best for tables separated by whitespace">Flow</button>
+            <button type="button" className={engineMode === "grid" ? "active" : ""} disabled={!adaptive} onClick={() => updateCamelotSettings({ engineMode: "grid" })} title="Best for tables with visible grid lines">Grid</button>
+          </div>
+        </div>
+        {engineMode === "flow" ? <>
+          <div className="properties-info-row">
+            <label className="properties-info-label" htmlFor="adaptive-row-tolerance">Row tolerance</label>
+            <InputNumber id="adaptive-row-tolerance" className="properties-number-input" min={0} max={50} disabled={!adaptive} value={camelotSettings.rowTolerance ?? 2} onChange={(value) => updateCamelotSettings({ rowTolerance: Math.max(0, Math.min(50, Number(value) || 0)) })} />
+          </div>
+          <div className="properties-info-row">
+            <label className="properties-info-label" htmlFor="adaptive-column-tolerance">Column tolerance</label>
+            <InputNumber id="adaptive-column-tolerance" className="properties-number-input" min={0} max={50} disabled={!adaptive} value={camelotSettings.columnTolerance ?? 0} onChange={(value) => updateCamelotSettings({ columnTolerance: Math.max(0, Math.min(50, Number(value) || 0)) })} />
+          </div>
+        </> : <>
+          <div className="properties-info-row">
+            <label className="properties-info-label" htmlFor="adaptive-line-sensitivity">Line sensitivity</label>
+            <InputNumber id="adaptive-line-sensitivity" className="properties-number-input" min={1} max={50} disabled={!adaptive} value={camelotSettings.lineSensitivity ?? 15} onChange={(value) => updateCamelotSettings({ lineSensitivity: Math.max(1, Math.min(50, Number(value) || 1)) })} />
+          </div>
+          <div className="properties-info-row">
+            <label className="properties-info-label" htmlFor="adaptive-line-tolerance">Line tolerance</label>
+            <InputNumber id="adaptive-line-tolerance" className="properties-number-input" min={0} max={50} disabled={!adaptive} value={camelotSettings.lineTolerance ?? 2} onChange={(value) => updateCamelotSettings({ lineTolerance: Math.max(0, Math.min(50, Number(value) || 0)) })} />
+          </div>
+          <div className="properties-info-row">
+            <label className="properties-info-label" htmlFor="adaptive-joint-tolerance">Joint tolerance</label>
+            <InputNumber id="adaptive-joint-tolerance" className="properties-number-input" min={0} max={50} disabled={!adaptive} value={camelotSettings.jointTolerance ?? 2} onChange={(value) => updateCamelotSettings({ jointTolerance: Math.max(0, Math.min(50, Number(value) || 0)) })} />
+          </div>
+          <div className="properties-info-row">
+            <span className="properties-info-label">Read background lines</span>
+            <GrooveSwitch checked={camelotSettings.processBackground ?? false} onChange={(checked) => adaptive && updateCamelotSettings({ processBackground: checked })} />
+          </div>
+        </>}
+        <div className="properties-info-row">
+          <span className="properties-info-label">Split text across columns</span>
+          <GrooveSwitch checked={camelotSettings.splitText ?? true} onChange={(checked) => updateCamelotSettings({ splitText: checked })} />
+        </div>
+        <div className="properties-info-row">
+          <label className="properties-info-label" htmlFor="adaptive-strip-text">Remove characters</label>
+          <input
+            id="adaptive-strip-text"
+            className="properties-text-input"
+            type="text"
+            maxLength={128}
+            disabled={!adaptive}
+            value={camelotSettings.stripText ?? ""}
+            placeholder="None"
+            onChange={(event) => updateCamelotSettings({ stripText: event.target.value })}
           />
         </div>
       </div>

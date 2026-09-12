@@ -42,6 +42,7 @@ class ConvertRequest(BaseModel):
     tables: list[dict[str, Any]]
     occurrenceOrder: bool = False
     sampleMode: dict[str, Any] | None = None
+    pageFilter: dict[str, Any] | None = None
 
 
 class SchemaPreviewRequest(BaseModel):
@@ -102,7 +103,7 @@ async def convert(req: ConvertRequest):
             result = await run_in_threadpool(
                 extraction.extract_grouped,
                 path, req.tables, total_pages, _DPI,
-                progress_cb, req.sampleMode, req.occurrenceOrder,
+                progress_cb, req.sampleMode, req.occurrenceOrder, req.pageFilter,
             )
         except Exception as e:
             raise HTTPException(500, str(e))

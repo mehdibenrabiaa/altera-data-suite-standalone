@@ -1350,6 +1350,7 @@ button:focus-visible {
    instead of each window inventing its own (Browse used to just be a
    bare text line). */
 .filter-builder-window .filter-empty-state,
+.group-by-window .filter-empty-state,
 .header-promoter-window .filter-empty-state,
 .browse-window .filter-empty-state,
 .merge-window .filter-empty-state,
@@ -1378,6 +1379,7 @@ button:focus-visible {
    above, pushing the title and message noticeably farther apart than the
    original's clean 10px. */
 .filter-builder-window .filter-empty-state h3,
+.group-by-window .filter-empty-state h3,
 .header-promoter-window .filter-empty-state h3,
 .browse-window .filter-empty-state h3,
 .merge-window .filter-empty-state h3,
@@ -1394,6 +1396,7 @@ button:focus-visible {
 .add-column-window .filter-empty-state h3,
 .summary-window .filter-empty-state h3 { margin: 0; font-size: 14px; font-weight: 600; color: var(--text-primary); }
 .filter-builder-window .filter-empty-state p,
+.group-by-window .filter-empty-state p,
 .header-promoter-window .filter-empty-state p,
 .browse-window .filter-empty-state p,
 .merge-window .filter-empty-state p,
@@ -1896,6 +1899,254 @@ button:focus-visible {
   margin-top: 2px;
 }
 .cleaner-window .cleaner-btn-add-op:hover { background: rgba(254, 77, 65, 0.12); border-color: #FE4D41; }
+.page-filter-config { max-width: 560px; }
+.page-filter-field { display: grid; gap: 6px; margin-bottom: 14px; }
+.page-filter-field:last-child { margin-bottom: 0; }
+
+/* Group By uses a purpose-built two-panel editor: source columns remain
+   visible while metrics are configured, matching the interaction density
+   of the data tools rather than the generic vertical metric-card editor. */
+.group-by-window {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: #f7f7f7;
+  color: #1a1a1a;
+}
+.group-by-layout {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(220px, 0.8fr) minmax(440px, 1.7fr);
+  gap: 14px;
+  padding: 14px;
+  overflow: hidden;
+}
+.group-by-source-panel,
+.group-by-config-panel {
+  min-height: 0;
+  border: 1px solid #dedede;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+}
+.group-by-source-panel { padding: 12px; }
+.group-by-config-panel { overflow: auto; }
+.group-by-panel-heading {
+  font-size: 13px;
+  font-weight: 600;
+  color: #303030;
+  margin-bottom: 8px;
+}
+.group-by-panel-heading span { font-weight: 400; color: #777; }
+.group-by-filter {
+  width: 100%;
+  height: 32px;
+  box-sizing: border-box;
+  padding: 0 9px;
+  border: 1px solid #cfcfcf;
+  border-radius: 2px;
+  font: inherit;
+  outline: none;
+}
+.group-by-filter:focus { border-color: #FE4D41; }
+.group-by-column-list {
+  flex: 1;
+  min-height: 100px;
+  overflow-y: auto;
+  margin-top: 8px;
+  border: 1px solid #e1e1e1;
+}
+.group-by-source-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  padding: 0 8px;
+  border: 0;
+  border-bottom: 1px solid #f0f0f0;
+  background: #fff;
+  color: #292929;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.group-by-source-row:hover { background: #f8f8f8; }
+.group-by-source-row.selected { background: #fdf0ef; color: #b4372c; }
+.group-by-column-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 19px;
+  height: 19px;
+  border-radius: 3px;
+  background: #596a80;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+}
+.group-by-column-mark.grouping { background: #FE4D41; }
+.group-by-source-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+.group-by-source-actions .btn { justify-content: center; height: 32px; padding: 0 8px; font-size: 12px; }
+.group-by-grouping { padding: 13px 14px; border-bottom: 1px solid #dedede; background: #fafafa; }
+.group-by-grouping-values { display: flex; flex-wrap: wrap; gap: 6px; min-height: 27px; align-items: center; }
+.group-by-empty-inline { font-size: 12px; color: #888; }
+.group-by-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid #edb7b2;
+  border-radius: 3px;
+  background: #fff1f0;
+  color: #a83b32;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.group-by-chip span { font-size: 16px; line-height: 1; }
+.group-by-table-wrap { padding: 35px 14px 14px; }
+.group-by-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 13px; }
+.group-by-table th,
+.group-by-table td { height: 34px; padding: 0 10px; border: 1px solid #dedede; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+.group-by-table th { background: #f1f1f1; color: #555; font-weight: 600; }
+.group-by-table tbody tr { cursor: pointer; }
+.group-by-table tbody tr:hover { background: #fafafa; }
+.group-by-table tbody tr.selected { background: #fdf0ef; }
+.group-by-table-empty { height: 88px !important; color: #888; text-align: center !important; }
+.group-by-no-aggregation { color: #999; }
+.group-by-aggregations { margin: auto 14px 14px; padding: 13px 14px; border: 1px solid #dedede; background: #fafafa; }
+.group-by-aggregation-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px 14px; }
+.group-by-aggregation-option { min-height: 23px; font-size: 12px; color: #333; }
+.group-by-nth-control { margin-top: 12px; }
+.group-by-nth-control .ant-input-number { width: 64px; }
+
+/* Align Group By with the rest of the node configuration family. The
+   information-dense two-column workflow stays, but uses Header Promoter's
+   sidebar rhythm and Unique/Cleaner's simple section/list surfaces. */
+.group-by-window {
+  box-sizing: border-box;
+  background: #f5f5f5;
+  font-family: "Google Sans Flex", sans-serif;
+  font-size: 13px;
+}
+.group-by-layout {
+  grid-template-columns: 230px minmax(0, 1fr);
+  gap: 0;
+  padding: 0;
+}
+.group-by-source-panel {
+  padding: 14px;
+  border: 0;
+  border-right: 1px solid #e0e0e0;
+  background: #f0f0f0;
+}
+.group-by-config-panel {
+  border: 0;
+  background: #f5f5f5;
+}
+.group-by-panel-heading {
+  margin-bottom: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #555;
+}
+.group-by-filter {
+  height: 28px;
+  border-color: #e0e0e0;
+  border-radius: 0;
+  background: #fff;
+  font-size: 12px;
+}
+.group-by-filter:focus { border-color: #FE4D41; }
+.group-by-column-list {
+  margin-top: 7px;
+  border-color: #e0e0e0;
+  background: #fff;
+}
+.group-by-source-row {
+  min-height: 29px;
+  padding: 0 7px;
+  border-bottom-color: transparent;
+  font-size: 12px;
+}
+.group-by-source-row:hover { background: #f0f0f0; }
+.group-by-source-row.selected { background: #fff3f2; color: #FE4D41; }
+.group-by-column-mark {
+  width: 17px;
+  height: 17px;
+  border-radius: 2px;
+  background: #808896;
+  font-size: 9px;
+}
+.group-by-column-mark.grouping { background: #FE4D41; }
+.group-by-source-actions {
+  grid-template-columns: 1fr;
+  gap: 6px;
+  margin-top: 8px;
+}
+.group-by-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid #c8c8c8;
+  border-radius: 2px;
+  background: #fff;
+  color: #333;
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.group-by-action:hover:not(:disabled) { border-color: #999; background: #fafafa; }
+.group-by-action:disabled { color: #aaa; cursor: not-allowed; }
+.group-by-add-metric {
+  border-color: #FE4D41;
+  background: #FE4D41;
+  color: #fff;
+}
+.group-by-add-metric:hover:not(:disabled) { border-color: #FF6040; background: #FF6040; }
+.group-by-grouping {
+  padding: 14px 14px 10px;
+  border-bottom: 0;
+  background: transparent;
+}
+.group-by-grouping-values { min-height: 25px; }
+.group-by-chip {
+  height: 24px;
+  border-color: #f5c0bc;
+  border-radius: 2px;
+  background: #fff3f2;
+  color: #FE4D41;
+  font-size: 11px;
+}
+.group-by-table-wrap { padding: 35px 14px 14px; }
+.group-by-table { background: #fff; font-size: 12px; }
+.group-by-table th,
+.group-by-table td { height: 30px; border-color: #e0e0e0; }
+.group-by-table th { background: #f0f0f0; color: #555; }
+.group-by-table tbody tr:hover { background: #f0f0f0; }
+.group-by-table tbody tr.selected { background: #fff; }
+.group-by-table tbody tr.selected td:first-child { border-left: 3px solid #FE4D41; padding-left: 8px; }
+.group-by-table tbody tr.selected td:first-child { font-weight: 600; }
+.group-by-aggregations {
+  margin: 0 14px 14px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.group-by-aggregation-grid {
+  padding: 9px 10px;
+  border: 1px solid #e0e0e0;
+  background: #fff;
+}
+.group-by-aggregation-option { min-height: 21px; font-size: 12px; }
+.group-by-nth-control { margin: 8px 10px 0; }
+.group-by-nth-control .cleaner-param-label { width: auto; }
 
 /* Unique window -- same outer shell/section rhythm as the other Configure
    windows (Shift Columns' shape is the closest match: no grid, a plain
@@ -3295,6 +3546,74 @@ body.dock-dragging .dock-style-canvas-dock-panel {
   background: var(--bg-hover);
 }
 
+.properties-tuning-box {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--bg-hover);
+  border: 1px solid var(--border-color);
+  border-radius: 0;
+  padding: 8px 10px;
+}
+.properties-tuning-box.disabled { opacity: 0.5; }
+.properties-tuning-box.disabled .groove-switch { pointer-events: none; }
+.properties-tuning-heading {
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+.properties-mode-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border-color-strong);
+  border-radius: 0;
+  overflow: hidden;
+}
+.properties-mode-toggle button {
+  height: 24px;
+  min-width: 42px;
+  padding: 0 8px;
+  border: 0;
+  border-right: 1px solid var(--border-color-strong);
+  background: var(--bg-panel);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.properties-mode-toggle button:last-child { border-right: 0; }
+.properties-mode-toggle button.active { background: var(--primary-color); color: #fff; }
+.properties-mode-toggle button:disabled { cursor: default; }
+.properties-number-input,
+.properties-text-input {
+  height: 24px;
+  box-sizing: border-box;
+  border: 1px solid var(--border-color-strong);
+  border-radius: 0;
+  background: var(--bg-panel);
+  color: var(--text-primary);
+  font: inherit;
+  padding: 0 6px;
+}
+.properties-number-input {
+  width: 58px;
+  border: 1px solid var(--border-color-strong) !important;
+  border-radius: 0;
+  background: var(--bg-panel);
+  box-shadow: none;
+}
+.properties-number-input input { padding: 0 6px !important; }
+.properties-text-input { width: 92px; }
+.properties-number-input:focus,
+.properties-text-input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+}
+.properties-number-input.ant-input-number-focused {
+  border-color: var(--primary-color) !important;
+  box-shadow: none;
+}
+
 .properties-row {
   display: flex;
   align-items: center;
@@ -3347,7 +3666,7 @@ body.dock-dragging .dock-style-canvas-dock-panel {
   gap: 6px;
   background: var(--bg-hover);
   border: 1px solid var(--border-color);
-  border-radius: 4px;
+  border-radius: 0;
   padding: 8px 10px;
   margin-top: 8px;
 }

@@ -277,7 +277,25 @@ def sort_rows(dfs: list[pd.DataFrame], params: dict[str, Any]) -> tuple[pd.DataF
 # aggregation} metric. No GROUP BY column here (that's a materially bigger
 # feature -- a future node, not this one); every metric summarizes the
 # WHOLE table.
-_AGGREGATE_LABELS = {"sum": "Sum", "average": "Average", "count": "Count", "min": "Min", "max": "Max"}
+_AGGREGATE_LABELS = {
+    "sum": "Sum", "average": "Average", "count": "Count", "min": "Min", "max": "Max",
+    "first": "First value", "last": "Last value", "nth": "Nth occurrence",
+}
+_NUMERIC_AGGREGATIONS = {"sum", "average", "count", "min", "max"}
+
+
+def _is_non_blank(value: Any) -> bool:
+    return not pd.isna(value) and str(value).strip() != ""
+
+
+def _nth_occurrence(metric: dict[str, Any]) -> int:
+    try:
+        occurrence = int(metric.get("occurrence") or 1)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Nth occurrence must be a positive whole number.") from exc
+    if occurrence < 1:
+        raise ValueError("Nth occurrence must be a positive whole number.")
+    return occurrence
 
 
 def aggregate_columns(dfs: list[pd.DataFrame], params: dict[str, Any]) -> tuple[pd.DataFrame, list[str], list[str]]:
@@ -291,6 +309,7 @@ def aggregate_columns(dfs: list[pd.DataFrame], params: dict[str, Any]) -> tuple[
     warnings: list[str] = []
     labels: list[str] = []
     values: list[str] = []
+    output_types: list[str] = []
     for m in metrics:
         col = m.get("column")
         agg = m.get("aggregation")
@@ -305,8 +324,16 @@ def aggregate_columns(dfs: list[pd.DataFrame], params: dict[str, Any]) -> tuple[
             # Count of non-blank cells -- not len(df), which would just be
             # the same number for every column and defeat the point of
             # picking a specific column to count.
-            non_blank = column_values.astype(str).str.strip() != ""
-            result_value = str(int(non_blank.sum()))
+            result_value = str(sum(_is_non_blank(value) for value in column_values))
+        elif agg in ("first", "last", "nth"):
+            non_blank = [value for value in column_values if _is_non_blank(value)]
+            if agg == "first":
+                result_value = str(non_blank[0]) if non_blank else ""
+            elif agg == "last":
+                result_value = str(non_blank[-1]) if non_blank else ""
+            else:
+                occurrence = _nth_occurrence(m)
+                result_value = str(non_blank[occurrence - 1]) if len(non_blank) >= occurrence else ""
         else:
             numeric = [n for n in (_to_number_or_none(v) for v in column_values) if n is not None]
             if not numeric:
@@ -323,13 +350,78 @@ def aggregate_columns(dfs: list[pd.DataFrame], params: dict[str, Any]) -> tuple[
 
         labels.append(f"{_AGGREGATE_LABELS[agg]} of {col}")
         values.append(result_value)
+        output_types.append("number" if agg in _NUMERIC_AGGREGATIONS else "text")
 
     if not labels:
         raise ValueError("None of the configured columns exist in the input table.")
 
     labels = _make_unique_column_names(labels)
     result = pd.DataFrame([values], columns=labels)
-    result.attrs["column_types"] = {label: "number" for label in labels}
+    result.attrs["column_types"] = dict(zip(labels, output_types))
+    return result, warnings, []
+
+
+def group_by(dfs: list[pd.DataFrame], params: dict[str, Any]) -> tuple[pd.DataFrame, list[str], list[str]]:
+    if not dfs:
+        raise ValueError("Group By needs a connected input table.")
+    df = dfs[0]
+    group_columns = params.get("groupByColumns") or []
+    metrics = params.get("metrics") or []
+    if len(group_columns) != 1:
+        raise ValueError("Select exactly one grouping column.")
+    if not metrics:
+        raise ValueError("Add at least one column to aggregate.")
+    group_column = group_columns[0]
+    if group_column not in df.columns:
+        raise ValueError(f"Grouping column '{group_column}' not found.")
+
+    valid_metrics = [metric for metric in metrics if metric.get("column") in df.columns]
+    if not valid_metrics:
+        raise ValueError("None of the configured columns exist in the input table.")
+    for metric in valid_metrics:
+        if metric.get("aggregation") not in _AGGREGATE_LABELS:
+            raise ValueError(f"Unknown aggregation: {metric.get('aggregation')}")
+
+    warnings = [f"Column '{metric.get('column')}' not found -- skipped." for metric in metrics if metric.get("column") not in df.columns]
+    labels = _make_unique_column_names(
+        [group_column, *[f"{_AGGREGATE_LABELS[metric.get('aggregation')]} of {metric.get('column')}" for metric in valid_metrics]]
+    )
+    rows: list[list[Any]] = []
+    grouped = df.groupby(group_column, dropna=False, sort=False)
+    for key, frame in grouped:
+        values: list[Any] = ["" if pd.isna(key) else str(key)]
+        for metric in valid_metrics:
+            column = metric["column"]
+            aggregation = metric.get("aggregation")
+            if aggregation not in _AGGREGATE_LABELS:
+                raise ValueError(f"Unknown aggregation: {aggregation}")
+            series = frame[column]
+            if aggregation == "count":
+                values.append(str(sum(_is_non_blank(value) for value in series)))
+                continue
+            if aggregation in ("first", "last", "nth"):
+                non_blank = [value for value in series if _is_non_blank(value)]
+                if aggregation == "first":
+                    values.append(str(non_blank[0]) if non_blank else "")
+                elif aggregation == "last":
+                    values.append(str(non_blank[-1]) if non_blank else "")
+                else:
+                    occurrence = _nth_occurrence(metric)
+                    values.append(str(non_blank[occurrence - 1]) if len(non_blank) >= occurrence else "")
+                continue
+            numeric = [number for number in (_to_number_or_none(value) for value in series) if number is not None]
+            if not numeric:
+                values.append("")
+                continue
+            values.append(_format_number({"sum": sum(numeric), "average": sum(numeric) / len(numeric), "min": min(numeric), "max": max(numeric)}[aggregation]))
+        rows.append(values)
+
+    result = pd.DataFrame(rows, columns=labels)
+    input_types = _merged_column_types(dfs)
+    result.attrs["column_types"] = {
+        labels[0]: input_types.get(group_column, "text"),
+        **{label: "number" if metric.get("aggregation") in _NUMERIC_AGGREGATIONS else "text" for label, metric in zip(labels[1:], valid_metrics)},
+    }
     return result, warnings, []
 
 
@@ -1800,4 +1892,5 @@ NODE_TRANSFORMS: dict[str, Callable[[list[pd.DataFrame], dict[str, Any]], tuple[
     "file_input": file_input,
     "sort_rows": sort_rows,
     "aggregate_columns": aggregate_columns,
+    "group_by": group_by,
 }

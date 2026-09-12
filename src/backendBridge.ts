@@ -51,6 +51,7 @@ export function createBackendBridge(): QtBridge {
       const tables = Array.isArray(parsed) ? parsed : parsed.tables ?? [];
       const occurrenceOrder = Array.isArray(parsed) ? false : !!parsed.occurrenceOrder;
       const sampleMode = Array.isArray(parsed) ? null : parsed.sampleMode ?? null;
+      const pageFilter = Array.isArray(parsed) ? null : parsed.pageFilter ?? null;
       const receiveConvertResult = (window as unknown as {
         receiveConvertResult?: (byId: Record<string, { columns: string[]; rows: string[][] }>) => void;
       }).receiveConvertResult;
@@ -58,7 +59,7 @@ export function createBackendBridge(): QtBridge {
         const res = await fetch(`${base}/pdf-converter/convert`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ tables, occurrenceOrder, sampleMode }),
+          body: JSON.stringify({ tables, occurrenceOrder, sampleMode, pageFilter }),
         });
         if (!res.ok) throw new Error((await res.json()).detail ?? `HTTP ${res.status}`);
         const { slots } = await res.json();

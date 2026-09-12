@@ -35,6 +35,7 @@ export default defineConfig({
         textParser: resolve(__dirname, "text-parser.html"),
         inputData: resolve(__dirname, "input-data.html"),
         sort: resolve(__dirname, "sort.html"),
+        pageFilter: resolve(__dirname, "page-filter.html"),
         aggregate: resolve(__dirname, "aggregate.html"),
         headerPromoter: resolve(__dirname, "header-promoter.html"),
         merge: resolve(__dirname, "merge.html"),

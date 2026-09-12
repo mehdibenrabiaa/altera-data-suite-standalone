@@ -265,7 +265,7 @@ ipcMain.on("settings:close", () => {
 // in the Maps below. Actually destroyed (not just hidden) when the node
 // itself is deleted (see node:deleted further down), since a deleted
 // node's window can never be reopened and would otherwise leak forever.
-function createPerNodeWindowManager(kind: "filterBuilder" | "browse" | "summary" | "headerPromoter" | "merge" | "shiftColumns" | "cleaner" | "textParser" | "unique" | "columnEdit" | "changeType" | "regex" | "cascadeFill" | "export" | "unpivotColumns" | "pivotColumns" | "addColumn" | "conditionalColumn" | "inputData" | "sort" | "aggregate", opts: {
+function createPerNodeWindowManager(kind: "filterBuilder" | "browse" | "summary" | "headerPromoter" | "merge" | "shiftColumns" | "cleaner" | "textParser" | "unique" | "columnEdit" | "changeType" | "regex" | "cascadeFill" | "export" | "unpivotColumns" | "pivotColumns" | "addColumn" | "conditionalColumn" | "inputData" | "sort" | "aggregate" | "pageFilter", opts: {
   width: number; height: number; minWidth: number; minHeight: number; title: string; htmlFile: string; icon?: string;
 }) {
   const windows = new Map<string, BrowserWindow>();
@@ -468,6 +468,16 @@ const sortManager = createPerNodeWindowManager("sort", {
   icon: path.join(__dirname, "../public/node-icons/sort.png"),
 });
 
+const pageFilterManager = createPerNodeWindowManager("pageFilter", {
+  width: 460, height: 340, minWidth: 400, minHeight: 300, title: "Configure Node", htmlFile: "page-filter.html",
+  icon: path.join(__dirname, "../public/node-icons/filter.png"),
+});
+
+ipcMain.on("pageFilter:apply", (event, payload: { nodeId: string; [key: string]: unknown }) => {
+  win?.webContents.send("pageFilter:applied", payload);
+  BrowserWindow.fromWebContents(event.sender)?.hide();
+});
+
 ipcMain.on("sort:apply", (event, payload: { nodeId: string; [key: string]: unknown }) => {
   win?.webContents.send("sort:applied", payload);
   BrowserWindow.fromWebContents(event.sender)?.hide();
@@ -476,7 +486,7 @@ ipcMain.on("sort:apply", (event, payload: { nodeId: string; [key: string]: unkno
 // Aggregate -- same real-Configure-window, round-trips-on-Apply shape as
 // every other Configure window above.
 const aggregateManager = createPerNodeWindowManager("aggregate", {
-  width: 560, height: 560, minWidth: 480, minHeight: 420, title: "Configure Node", htmlFile: "aggregate.html",
+  width: 920, height: 680, minWidth: 760, minHeight: 520, title: "Configure Node", htmlFile: "aggregate.html",
   icon: path.join(__dirname, "../public/node-icons/aggregate.png"),
 });
 
@@ -691,6 +701,7 @@ ipcMain.on("node:deleted", (_event, nodeId: string) => {
   summaryManager.closeForNode(nodeId);
   inputDataManager.closeForNode(nodeId);
   sortManager.closeForNode(nodeId);
+  pageFilterManager.closeForNode(nodeId);
   aggregateManager.closeForNode(nodeId);
 });
 

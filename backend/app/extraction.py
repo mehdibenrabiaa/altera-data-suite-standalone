@@ -19,6 +19,62 @@ from pypdfium2 import PdfDocument
 _CM = {"rgb(49, 122, 185)": "Blue", "rgb(239, 68, 68)": "Red", "rgb(34, 197, 94)": "Green", "rgb(168, 85, 247)": "Purple", "rgb(249, 115, 22)": "Orange"}
 
 
+def _camelot_tuning(info):
+    settings = info.get("camelotSettings") or {}
+
+    def tolerance(name, default):
+        try:
+            return max(0, min(50, int(settings.get(name, default))))
+        except (TypeError, ValueError):
+            return default
+
+    common = {
+        "split_text": bool(settings.get("splitText", True)),
+        "strip_text": str(settings.get("stripText", ""))[:128],
+    }
+    if settings.get("engineMode") == "grid":
+        return "lattice", {
+            **common,
+            "line_scale": tolerance("lineSensitivity", 15),
+            "line_tol": tolerance("lineTolerance", 2),
+            "joint_tol": tolerance("jointTolerance", 2),
+            "process_background": bool(settings.get("processBackground", False)),
+        }
+    return "stream", {
+        **common,
+        "row_tol": tolerance("rowTolerance", 2),
+        "column_tol": tolerance("columnTolerance", 0),
+    }
+
+
+def _page_is_selected(page_num, page_filter):
+    if not page_filter:
+        return True
+    selected = set()
+    for part in str(page_filter.get("pages", "")).split(","):
+        text = part.strip()
+        if not text:
+            continue
+        if "-" in text:
+            start, _, end = text.partition("-")
+            try:
+                first, last = int(start.strip()), int(end.strip())
+            except ValueError:
+                continue
+            if first > 0 and last >= first:
+                selected.update(range(first, last + 1))
+        else:
+            try:
+                value = int(text)
+            except ValueError:
+                continue
+            if value > 0:
+                selected.add(value)
+    if not selected:
+        return True
+    return page_num in selected if page_filter.get("mode") == "keep" else page_num not in selected
+
+
 def make_unique_column_names(columns) -> list:
     seen = {}
     unique = []
@@ -342,7 +398,15 @@ def _h2(file_path, page_num, tables_info, dpi, occurrence_order=False):
             table_area = [",".join(map(str, table_area_coords))]
             columns = [",".join(column_coords)] if column_coords else None
             try:
-                tables = camelot.read_pdf(file_path, flavor="stream", pages=str(page_num), table_areas=table_area, columns=columns, split_text=True)
+                engine_mode, tuning = _camelot_tuning(info)
+                tables = camelot.read_pdf(
+                    file_path,
+                    flavor=engine_mode,
+                    pages=str(page_num),
+                    table_areas=table_area,
+                    **({"columns": columns} if engine_mode == "stream" else {}),
+                    **tuning,
+                )
                 for table in tables:
                     df = table.df.copy()
                     df.columns = [f"Column_{i+1}" for i in range(len(df.columns))]
@@ -389,11 +453,11 @@ def extract_merged(file_path, tables_info, total_pages, dpi, progress_callback=N
     return _reorder_trailing_columns(pd.concat(all_dataframes, ignore_index=True))
 
 
-def extract_grouped(file_path, tables_info, total_pages, dpi, progress_callback=None, sample_mode=None, occurrence_order=False):
+def extract_grouped(file_path, tables_info, total_pages, dpi, progress_callback=None, sample_mode=None, occurrence_order=False, page_filter=None):
     """Real-conversion extraction: grouped by each table's outputSlot."""
     slotted_tables_info = [info for info in tables_info if info.get("outputSlot")]
     slot_to_info = {info["outputSlot"]: info for info in slotted_tables_info}
-    pages = _resolve_pages(total_pages, sample_mode)
+    pages = [page for page in _resolve_pages(total_pages, sample_mode) if _page_is_selected(page, page_filter)]
     by_slot = {}
     for i, page_num in enumerate(pages):
         for info in slotted_tables_info:

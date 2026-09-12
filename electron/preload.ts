@@ -296,6 +296,21 @@ contextBridge.exposeInMainWorld("alteraStudio", {
     ipcRenderer.send("sort:close");
   },
 
+  openPageFilterWindow: (payload: unknown): void => { ipcRenderer.invoke("pageFilter:open", payload); },
+  onPageFilterApplied: (cb: (payload: unknown) => void): (() => void) => {
+    const listener = (_event: unknown, payload: unknown) => cb(payload);
+    ipcRenderer.on("pageFilter:applied", listener);
+    return () => ipcRenderer.removeListener("pageFilter:applied", listener);
+  },
+  requestPageFilterInit: (nodeId: string): Promise<unknown> => ipcRenderer.invoke("pageFilter:request-init", nodeId),
+  onPageFilterInit: (cb: (payload: unknown) => void): (() => void) => {
+    const listener = (_event: unknown, payload: unknown) => cb(payload);
+    ipcRenderer.on("pageFilter:init", listener);
+    return () => ipcRenderer.removeListener("pageFilter:init", listener);
+  },
+  applyPageFilter: (payload: unknown): void => { ipcRenderer.send("pageFilter:apply", payload); },
+  closePageFilterWindow: (): void => { ipcRenderer.send("pageFilter:close"); },
+
   openAggregateWindow: (payload: unknown): void => {
     ipcRenderer.invoke("aggregate:open", payload);
   },

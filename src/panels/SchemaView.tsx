@@ -30,7 +30,7 @@ import { Spin } from "antd";
 import { LoadingOutlined } from "@ant-design/icons";
 import { AgGridReact } from "ag-grid-react";
 import { ModuleRegistry, AllCommunityModule, themeQuartz, type ColDef } from "ag-grid-community";
-import type { Rectangle, Group, SchemaPreviewTable, ProcessorNodeInstance, FilterBuilderParams, FilterColumnDefinition, HeaderPromoterParams, MergeParams, ShiftColumnsParams, CleanerParams, UniqueParams, ColumnEditParams, ChangeTypeParams, RegexParams, CascadeFillParams, ExportParams, UnpivotColumnsParams, PivotColumnsParams, AddColumnParams, ConditionalColumnParams, TextParserParams, InputDataParams, SortParams, AggregateParams, NodeLogEntry } from "../types";
+import type { Rectangle, Group, SchemaPreviewTable, ProcessorNodeInstance, FilterBuilderParams, FilterColumnDefinition, HeaderPromoterParams, MergeParams, ShiftColumnsParams, CleanerParams, UniqueParams, ColumnEditParams, ChangeTypeParams, RegexParams, CascadeFillParams, ExportParams, UnpivotColumnsParams, PivotColumnsParams, AddColumnParams, ConditionalColumnParams, TextParserParams, InputDataParams, SortParams, AggregateParams, PageFilterParams, NodeLogEntry } from "../types";
 import { computeDefaultMatchPair } from "../mergeDefaults";
 import {
   NODE_DRAG_MIME,
@@ -49,7 +49,7 @@ import { TypedColumnHeader } from "../columnTypeIcons";
 // (backend/app/nodes.py's NODE_TRANSFORMS registry) -- gates the "Run"
 // context-menu item so it only appears on nodes that can really execute.
 // Extend both maps together as more real nodes come online.
-const RUNNABLE_NODE_KINDS = new Set(["Horizontal Stack", "Filter", "Header Promoter", "Index Column", "Merge", "Shift Columns", "Cleaner", "Unique", "Column Edit", "Change Type", "Regular Expressions", "Text Parser", "Cascade Fill", "Export", "Unpivot Columns", "Pivot Columns", "Formula", "Add Column", "Bridge", "Concatenate", "Input Data", "Sort", "Aggregate"]);
+const RUNNABLE_NODE_KINDS = new Set(["Horizontal Stack", "Filter", "Header Promoter", "Index Column", "Merge", "Shift Columns", "Cleaner", "Unique", "Column Edit", "Change Type", "Regular Expressions", "Text Parser", "Cascade Fill", "Export", "Unpivot Columns", "Pivot Columns", "Formula", "Add Column", "Bridge", "Concatenate", "Input Data", "Sort", "Aggregate", "Group By"]);
 const NODE_KIND_SLUGS: Record<string, string> = {
   "Horizontal Stack": "horizontal_stack",
   "Filter": "filter_builder",
@@ -74,6 +74,7 @@ const NODE_KIND_SLUGS: Record<string, string> = {
   "Input Data": "file_input",
   "Sort": "sort_rows",
   "Aggregate": "aggregate_columns",
+  "Group By": "group_by",
 };
 // Minimum resolved (primary) inputs a kind needs before it's worth
 // running -- Horizontal Stack needs 2+ tables to combine, Filter Builder
@@ -103,6 +104,7 @@ const NODE_MIN_INPUTS: Record<string, number> = { "Horizontal Stack": 2, "Filter
 // views data), so it's threaded through this same map rather than a
 // separate lookup.
 const NODE_WINDOW_LABEL: Record<string, string> = {
+  "Page Filter": "Configure...",
   "Filter": "Configure…",
   "Browse": "Browse Data…",
   "Summary": "View Summary…",
@@ -124,6 +126,7 @@ const NODE_WINDOW_LABEL: Record<string, string> = {
   "Input Data": "Configure…",
   "Sort": "Configure…",
   "Aggregate": "Configure…",
+  "Group By": "Configure…",
 };
 const NODE_KINDS_WITH_WINDOW = new Set(Object.keys(NODE_WINDOW_LABEL));
 
@@ -1123,6 +1126,7 @@ interface SchemaViewProps {
   // panel in App.tsx, which lives outside this component entirely --
   // null whenever nothing selected/nothing to show.
   onSelectedNodeLogChange: (payload: { nodeName: string; entries: NodeLogEntry[] } | null) => void;
+  onConversionPageFilterChange: (filter: { mode: "keep" | "exclude"; pages: string } | null) => void;
   visible: boolean;
 }
 
@@ -1157,6 +1161,7 @@ export default function SchemaView({
   selectedIds,
   onTableSelectionChange,
   onSelectedNodeLogChange,
+  onConversionPageFilterChange,
   visible,
 }: SchemaViewProps) {
   const {
@@ -2123,6 +2128,15 @@ export default function SchemaView({
     return inputs;
   }, [convertedTables, nodeOutputs, getOrderedSourceIds, resolveSourceName]);
 
+  useEffect(() => {
+    const filterNode = processorNodes.find((node) => node.catalogName === "Page Filter");
+    const params = filterNode?.params as PageFilterParams | undefined;
+    const input = filterNode ? resolveNodeInputs(filterNode.id)[0] : undefined;
+    const columnIndex = input && params ? input.columns.indexOf(params.column) : -1;
+    const pages = columnIndex >= 0 ? Array.from(new Set(input!.rows.map((row) => String(row[columnIndex] ?? "").trim()).filter(Boolean))).join(", ") : "";
+    onConversionPageFilterChange(params && pages ? { mode: params.mode, pages } : null);
+  }, [processorNodes, resolveNodeInputs, onConversionPageFilterChange]);
+
   // Export's Configure window preview list -- deliberately doesn't require
   // a real Convert (unlike resolveNodeInputs above): picking an export
   // format/location has no need for actual data yet, just to know what's
@@ -2343,20 +2357,38 @@ export default function SchemaView({
     closeNodeCtxMenu();
   }, [processorNodes, resolveNodeInputs, closeNodeCtxMenu, theme]);
 
+  const handleOpenPageFilter = useCallback((id: string) => {
+    const proc = processorNodes.find((p) => p.id === id);
+    if (!proc) return;
+    const input = resolveNodeInputs(id)[0];
+    window.alteraStudio.openPageFilterWindow({
+      nodeId: id,
+      nodeName: proc.name || proc.catalogName,
+      columns: input?.columns ?? [],
+      initialParams: (proc.params as PageFilterParams | undefined) ?? { mode: "keep", column: input?.columns[0] ?? "" },
+    });
+    closeNodeCtxMenu();
+  }, [processorNodes, resolveNodeInputs, closeNodeCtxMenu]);
+
   // Opens (or focuses/reseeds) the node's Configure window -- same real-
   // window, snapshot-on-open pattern as Sort above.
   const handleOpenAggregate = useCallback((id: string) => {
     const proc = processorNodes.find((p) => p.id === id);
     if (!proc) return;
     const primary = resolveNodeInputs(id)[0];
+    const isGroupBy = proc.catalogName === "Group By";
     window.alteraStudio.openAggregateWindow({
       nodeId: id,
       nodeName: proc.name || proc.catalogName,
       columns: primary?.columns ?? [],
-      initialParams: (proc.params as AggregateParams | undefined) ?? {
+      initialParams: (proc.params as AggregateParams | undefined) ?? (isGroupBy ? {
+        metrics: [],
+        groupByColumns: primary?.columns[0] ? [primary.columns[0]] : [],
+      } : {
         metrics: [{ id: "metric_0", column: primary?.columns[0] ?? "", aggregation: "sum" }],
-      },
+      }),
       theme,
+      mode: isGroupBy ? "groupBy" : "aggregate",
     });
     closeNodeCtxMenu();
   }, [processorNodes, resolveNodeInputs, closeNodeCtxMenu, theme]);
@@ -2699,9 +2731,10 @@ export default function SchemaView({
     else if (proc?.catalogName === "Add Column") handleOpenConditionalColumn(id);
     else if (proc?.catalogName === "Input Data") handleOpenInputData(id);
     else if (proc?.catalogName === "Sort") handleOpenSort(id);
-    else if (proc?.catalogName === "Aggregate") handleOpenAggregate(id);
+    else if (proc?.catalogName === "Page Filter") handleOpenPageFilter(id);
+    else if (proc?.catalogName === "Aggregate" || proc?.catalogName === "Group By") handleOpenAggregate(id);
     else handleOpenFilterBuilder(id);
-  }, [processorNodes, handleOpenBrowse, handleOpenSummary, handleOpenHeaderPromoter, handleOpenMerge, handleOpenShiftColumns, handleOpenCleaner, handleOpenUnique, handleOpenColumnEdit, handleOpenChangeType, handleOpenRegex, handleOpenTextParser, handleOpenCascadeFill, handleOpenExport, handleOpenUnpivotColumns, handleOpenPivotColumns, handleOpenAddColumn, handleOpenConditionalColumn, handleOpenInputData, handleOpenSort, handleOpenAggregate, handleOpenFilterBuilder, onNodesChange]);
+  }, [processorNodes, handleOpenBrowse, handleOpenSummary, handleOpenHeaderPromoter, handleOpenMerge, handleOpenShiftColumns, handleOpenCleaner, handleOpenUnique, handleOpenColumnEdit, handleOpenChangeType, handleOpenRegex, handleOpenTextParser, handleOpenCascadeFill, handleOpenExport, handleOpenUnpivotColumns, handleOpenPivotColumns, handleOpenAddColumn, handleOpenConditionalColumn, handleOpenInputData, handleOpenSort, handleOpenPageFilter, handleOpenAggregate, handleOpenFilterBuilder, onNodesChange]);
 
   // `select`: only true for a user-initiated single-node run (the context
   // menu's "Run"), which is the one case selecting the node to show its

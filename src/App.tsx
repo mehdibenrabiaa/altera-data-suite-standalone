@@ -974,6 +974,12 @@ const KonvaA4Editor = () => {
   // the whole dataset for a table once it's actually been converted,
   // instead of staying stuck on the preview sample forever.
   const [convertedTables, setConvertedTables] = useState<Record<string, { columns: string[]; rows: string[][] }>>({});
+  const [conversionPageFilter, setConversionPageFilter] = useState<{ mode: "keep" | "exclude"; pages: string } | null>(null);
+  const handleConversionPageFilterChange = useCallback((next: { mode: "keep" | "exclude"; pages: string } | null) => {
+    setConversionPageFilter((current) => (
+      current?.mode === next?.mode && current?.pages === next?.pages ? current : next
+    ));
+  }, []);
   const [schemaPreviewLoading, setSchemaPreviewLoading] = useState(false);
   const [schemaPreviewError, setSchemaPreviewError] = useState<string | null>(null);
   const [closeAfterConvert, setCloseAfterConvert] = useState<boolean>(true);
@@ -1309,6 +1315,7 @@ const KonvaA4Editor = () => {
           columns: allRelevantGuides.map((g) => g.x.toString()),
           ...(columnsByPage ? { columns_by_page: columnsByPage } : {}),
           autoDetectColumns: rect.autoDetectColumns === true,
+          ...(rect.camelotSettings ? { camelotSettings: rect.camelotSettings } : {}),
           ...(rectIndex < MAX_OUTPUT_SLOTS ? { outputSlot: rectIndex + 1 } : {}),
           ...(rect.columnRenames && Object.keys(rect.columnRenames).length
             ? { columnRenames: rect.columnRenames }
@@ -1472,6 +1479,18 @@ const KonvaA4Editor = () => {
     );
   }, [pageNum]);
 
+  // A Page Filter can affect conversion only while the configured node is
+  // actually part of the graph and receives an input table. This guard keeps
+  // a stale UI value from ever reaching the backend after a deletion or
+  // disconnection.
+  const activeConversionPageFilter = useMemo(() => {
+    const pageFilterNode = processorNodes.find((node) => node.catalogName === "Page Filter");
+    const hasInput = pageFilterNode && edges.some(
+      (edge) => edge.target === pageFilterNode.id && edge.targetHandle !== "extra",
+    );
+    return hasInput ? conversionPageFilter : null;
+  }, [processorNodes, edges, conversionPageFilter]);
+
   // Handle Convert button click - send PDF coordinates----------------------------
   const handleConvert = useCallback(() => {
     // Guards both the button (see ToolbarPanel's disabled prop below) and
@@ -1509,6 +1528,7 @@ const KonvaA4Editor = () => {
     const payload = {
       tables: pdfData,
       occurrenceOrder: occurrenceOrder,
+      pageFilter: activeConversionPageFilter,
       closeAfterConvert: closeAfterConvert,
       sampleMode: sampleConfig.enabled
         ? { mode: sampleConfig.mode, startPage: sampleConfig.startPage, endPage: sampleConfig.endPage, firstN: sampleConfig.firstN }
@@ -1520,7 +1540,18 @@ const KonvaA4Editor = () => {
     console.warn("[REACT] Calling bridge.getCoordinatesFromJs...");
     bridge.getCoordinatesFromJs(jsonData, 1);
     console.warn("[REACT] Call complete");
-  }, [bridge, isReady, rectangles, guides, computeAnnotationData, pageHeight, sampleConfig]);
+  }, [
+    bridge,
+    isReady,
+    rectangles,
+    guides,
+    computeAnnotationData,
+    pageHeight,
+    sampleConfig,
+    occurrenceOrder,
+    activeConversionPageFilter,
+    closeAfterConvert,
+  ]);
 
   // ── Schema preview: receive per-table column/sample data from Python ─────────
   useEffect(() => {
@@ -2462,6 +2493,10 @@ const KonvaA4Editor = () => {
     // open just left it sitting there showing a now-nonexistent node.
     setEdges((eds) => eds.filter((e) => !ids.includes(e.source) && !ids.includes(e.target)));
     setProcessorNodes((prev) => prev.filter((p) => !ids.includes(p.id)));
+    // A Page Filter is graph-dependent configuration. Clear the active
+    // conversion rule immediately; SchemaView reapplies one only when a
+    // still-connected, configured filter node remains in the graph.
+    setConversionPageFilter(null);
     ids.forEach((id) => window.alteraStudio.notifyNodeDeleted(id));
   }, []);
   const handleRenameProcessorNode = useCallback((id: string, name: string) => {
@@ -2524,6 +2559,11 @@ const KonvaA4Editor = () => {
     });
   }, [handleUpdateProcessorNodeParams]);
   useEffect(() => {
+    return window.alteraStudio.onPageFilterApplied(({ nodeId, params }) => {
+      handleUpdateProcessorNodeParams(nodeId, params as unknown as Record<string, unknown>);
+    });
+  }, [handleUpdateProcessorNodeParams]);
+  useEffect(() => {
     return window.alteraStudio.onAggregateApplied(({ nodeId, params }) => {
       handleUpdateProcessorNodeParams(nodeId, params as unknown as Record<string, unknown>);
     });
@@ -2582,6 +2622,7 @@ const KonvaA4Editor = () => {
   // Workflow-canvas edges -- see the `edges` state comment above for why
   // these live here now instead of as local SchemaView state.
   const handleEdgesChange = useCallback((changes: EdgeChange[]) => {
+    if (changes.some((change) => change.type === "remove")) setConversionPageFilter(null);
     setEdges((eds) => applyEdgeChanges(changes, eds));
   }, []);
   // Enforces each node type's input-port cardinality (see nodeCatalog.ts's
@@ -2617,6 +2658,7 @@ const KonvaA4Editor = () => {
   // Removes one edge by its own id -- the DeletableEdge "x" button (see
   // EdgeDeleteContext in SchemaView.tsx).
   const handleDeleteEdge = useCallback((edgeId: string) => {
+    setConversionPageFilter(null);
     setEdges((eds) => eds.filter((e) => e.id !== edgeId));
   }, []);
 
@@ -2634,10 +2676,12 @@ const KonvaA4Editor = () => {
   }, []);
   const handleReconnect = useCallback((oldEdge: Edge, newConnection: Connection) => {
     edgeReconnectSuccessfulRef.current = true;
+    setConversionPageFilter(null);
     setEdges((eds) => reconnectEdge(oldEdge, newConnection, withinInputCap(eds, newConnection, oldEdge.id)));
   }, [withinInputCap]);
   const handleReconnectEnd = useCallback((_event: unknown, edge: Edge) => {
     if (!edgeReconnectSuccessfulRef.current) {
+      setConversionPageFilter(null);
       setEdges((eds) => eds.filter((e) => e.id !== edge.id));
     }
     edgeReconnectSuccessfulRef.current = true;
@@ -4436,6 +4480,7 @@ const KonvaA4Editor = () => {
                 selectedIds={selectedIds}
                 onTableSelectionChange={handleTableSelectionChange}
                 onSelectedNodeLogChange={setSelectedNodeLog}
+                onConversionPageFilterChange={handleConversionPageFilterChange}
                 visible={showSchema}
               />
             </ErrorBoundary>

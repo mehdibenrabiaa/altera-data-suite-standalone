@@ -22,6 +22,18 @@ export interface SmartConfig {
   offset: SmartOffset;
   keywordSettings?: Record<string, KeywordSettings>;
 }
+
+export interface CamelotSettings {
+  engineMode?: "flow" | "grid";
+  rowTolerance?: number;
+  columnTolerance?: number;
+  lineSensitivity?: number;
+  lineTolerance?: number;
+  jointTolerance?: number;
+  processBackground?: boolean;
+  splitText?: boolean;
+  stripText?: string;
+}
 export const DEFAULT_SMART_CONFIG: SmartConfig = {
   keywords: [],
   offset: { top: 0, bottom: 0, left: 0, right: 0 },
@@ -115,6 +127,7 @@ export interface Rectangle {
   smartRawData?: Record<string, SmartRawPageEntry | null>;
   smartPageData?: Record<string, { bboxes: [number,number,number,number][]; union_bbox: [number,number,number,number] } | null>;
   autoDetectColumns?: boolean;
+  camelotSettings?: CamelotSettings;
   locked?: boolean;
   hidden?: boolean;
   groupId?: string;
@@ -401,14 +414,21 @@ export interface SortParams {
 // backend/app/nodes.py's aggregate_columns). Order here IS the output
 // column order, so -- like Text Parser's operations -- this list is
 // reorderable, not just addable/removable.
-export type AggregateType = "sum" | "average" | "count" | "min" | "max";
+export type AggregateType = "sum" | "average" | "count" | "min" | "max" | "first" | "last" | "nth";
 export interface AggregateMetric {
   id: string;
   column: string;
   aggregation: AggregateType;
+  occurrence?: number;
+}
+
+export interface PageFilterParams {
+  mode: "keep" | "exclude";
+  column: string;
 }
 export interface AggregateParams {
   metrics: AggregateMetric[];
+  groupByColumns?: string[];
 }
 
 // Unique's params -- ported from the original OWDeduplicator widget
@@ -646,6 +666,7 @@ export interface TableData {
   columns: string[];
   columns_by_page?: Record<string, string[]>;
   autoDetectColumns: boolean;
+  camelotSettings?: CamelotSettings;
   outputSlot?: number;
   columnRenames?: Record<string, string>;
 }

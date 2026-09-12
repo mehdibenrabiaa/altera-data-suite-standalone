@@ -29,7 +29,7 @@
 // Alteryx's own grouping and keeps Preparation from becoming a catch-all.
 // "analysis" has no Alteryx equivalent used here -- see its own comment
 // further down, by Summary/Aggregate's entries.
-export type CategoryKey = "io" | "preparation" | "transform" | "join" | "parse" | "analysis";
+export type CategoryKey = "io" | "conversion" | "preparation" | "transform" | "join" | "parse" | "analysis";
 
 export interface NodeCatalogEntry {
   name: string;
@@ -85,14 +85,15 @@ export function getInputPortMax(catalogName: string, handleId: string | null | u
 
 export const CATEGORY_META: Record<CategoryKey, { label: string; color: string }> = {
   io: { label: "In/Out", color: "#019B8A" },
+  conversion: { label: "Conversion", color: "#FE4D41" },
   preparation: { label: "Preparation", color: "#155F98" },
-  transform: { label: "Transform", color: "#E0A526" },
+  transform: { label: "Transform", color: "#FFD800" },
   join: { label: "Join", color: "#7753A0" },
   parse: { label: "Parse", color: "#E86F53" },
   analysis: { label: "Analysis", color: "#9BB058" },
 };
 
-export const CATEGORY_ORDER: CategoryKey[] = ["io", "preparation", "transform", "join", "parse", "analysis"];
+export const CATEGORY_ORDER: CategoryKey[] = ["io", "conversion", "preparation", "transform", "join", "parse", "analysis"];
 
 // Shared with SchemaView.tsx's onDrop handler -- the dataTransfer mime type
 // used to recognize a drag that originated from this catalog (as opposed to
@@ -117,6 +118,7 @@ export const NODE_CATALOG: NodeCatalogEntry[] = [
   { name: "Input Data", description: "Load a local Excel (.xlsx) or CSV file as a table -- no upstream connection needed.", icon: "./node-icons/input_data.svg", category: "io", hasInput: false, mainInputMax: 0 },
   { name: "Export", description: "Export one or more datasets to Excel (.xlsx) or CSV.", icon: "./node-icons/excel_exporter.svg", category: "io", hasOutput: false },
   { name: "Browse", description: "Preview a table's rows and columns without modifying the data.", icon: "./node-icons/browse.svg", category: "io", hasOutput: false, mainInputMax: 1 },
+  { name: "Page Filter", description: "Use a page-number column from an input table to keep or exclude PDF pages during conversion.", icon: "./node-icons/filter.svg", category: "conversion", hasOutput: false, mainInputMax: 1 },
   // Preparation -- Alteryx's own Select tool covers exactly what Column
   // Edit and Change Type do (reorder/rename/delete columns; change a
   // column's type), and Record ID is exactly Index Column. Shift
@@ -153,6 +155,7 @@ export const NODE_CATALOG: NodeCatalogEntry[] = [
   // reshaping it.
   { name: "Summary", description: "Per-column stats, distributions, and missing-value/gap detection -- a quick health check of a table.", icon: "./node-icons/summary.svg", category: "analysis", hasOutput: false, mainInputMax: 1 },
   { name: "Aggregate", description: "Collapse a table into one row of sums, averages, counts, minimums, and maximums.", icon: "./node-icons/aggregate.svg", category: "analysis", mainInputMax: 1 },
+  { name: "Group By", description: "Group rows by one column, then calculate metrics for every group.", icon: "./node-icons/group_by.svg", category: "transform", mainInputMax: 1 },
   // Join -- Alteryx's own Join tool is exactly Merge's "match on shared
   // columns" mode, and its Append Fields tool is exactly Horizontal
   // Stack's "combine by position" mode.

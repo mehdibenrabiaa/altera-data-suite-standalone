@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 
-import type { SettingsPayload, PersistedSettings, FilterBuilderParams, FilterColumnDefinition, HeaderPromoterParams, MergeParams, ShiftColumnsParams, CleanerParams, UniqueParams, ColumnEditParams, ChangeTypeParams, RegexParams, CascadeFillParams, ExportParams, UnpivotColumnsParams, PivotColumnsParams, AddColumnParams, ConditionalColumnParams, TextParserParams, InputDataParams, SortParams, AggregateParams } from "./types";
+import type { SettingsPayload, PersistedSettings, FilterBuilderParams, FilterColumnDefinition, HeaderPromoterParams, MergeParams, ShiftColumnsParams, CleanerParams, UniqueParams, ColumnEditParams, ChangeTypeParams, RegexParams, CascadeFillParams, ExportParams, UnpivotColumnsParams, PivotColumnsParams, AddColumnParams, ConditionalColumnParams, TextParserParams, InputDataParams, SortParams, AggregateParams, PageFilterParams } from "./types";
 import type { AppliedColumnType } from "./columnTypeDetection";
 
 // Mirrors the original devkit/filter-builder project's own ExtraColumnDef
@@ -166,6 +166,7 @@ export interface AggregateWindowPayload {
   columns: string[];
   initialParams: AggregateParams;
   theme: "light" | "dark";
+  mode?: "aggregate" | "groupBy";
 }
 export interface AggregateAppliedPayload {
   nodeId: string;
@@ -341,6 +342,17 @@ export interface ConditionalColumnAppliedPayload {
   params: ConditionalColumnParams;
 }
 
+export interface PageFilterWindowPayload {
+  nodeId: string;
+  nodeName: string;
+  columns: string[];
+  initialParams: PageFilterParams;
+}
+export interface PageFilterAppliedPayload {
+  nodeId: string;
+  params: PageFilterParams;
+}
+
 declare global {
   interface Window {
     alteraStudio: {
@@ -480,6 +492,13 @@ declare global {
       onSortInit: (cb: (payload: SortWindowPayload) => void) => () => void;
       applySort: (payload: SortAppliedPayload) => void;
       closeSortWindow: () => void;
+
+      openPageFilterWindow: (payload: PageFilterWindowPayload) => void;
+      onPageFilterApplied: (cb: (payload: PageFilterAppliedPayload) => void) => () => void;
+      requestPageFilterInit: (nodeId: string) => Promise<PageFilterWindowPayload>;
+      onPageFilterInit: (cb: (payload: PageFilterWindowPayload) => void) => () => void;
+      applyPageFilter: (payload: PageFilterAppliedPayload) => void;
+      closePageFilterWindow: () => void;
 
       // Aggregate -- same real-window, round-trips-on-Apply IPC shape as
       // every other Configure window.

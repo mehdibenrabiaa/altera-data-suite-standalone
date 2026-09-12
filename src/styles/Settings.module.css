@@ -295,6 +295,27 @@ textarea,
   margin-bottom: 6px;
 }
 
+/* Ant Design's default disabled primary button becomes nearly indistinguishable
+   from this window's dark surface. Keep the activation action visibly present
+   while still clearly disabled until a license key is entered. */
+.activationBody :global(.ant-btn-primary) {
+  background: #FE4D41;
+  border-color: #FE4D41;
+  color: #ffffff;
+}
+.activationBody :global(.ant-btn-primary:hover:not(:disabled)) {
+  background: #FF6040 !important;
+  border-color: #FF6040 !important;
+  color: #ffffff !important;
+}
+.activationBody :global(.ant-btn-primary:disabled),
+.activationBody :global(.ant-btn-primary.ant-btn-disabled) {
+  opacity: 1;
+  background: #6b3a36 !important;
+  border-color: #84504b !important;
+  color: #f1d8d5 !important;
+}
+
 .feedbackMsg {
   font-size: 11px;
   margin-top: 6px;

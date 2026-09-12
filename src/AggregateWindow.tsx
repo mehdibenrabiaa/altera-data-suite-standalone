@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
-import { ConfigProvider, Select, theme as antdTheme } from "antd";
+import { ConfigProvider, InputNumber, Select, theme as antdTheme } from "antd";
 import {
   DndContext,
   closestCenter,
@@ -93,6 +93,9 @@ const AGGREGATION_OPTIONS: { value: AggregateType; label: string }[] = [
   { value: "count", label: "Count" },
   { value: "min", label: "Min" },
   { value: "max", label: "Max" },
+  { value: "first", label: "First value" },
+  { value: "last", label: "Last value" },
+  { value: "nth", label: "Nth occurrence" },
 ];
 
 interface SortableMetricCardProps {
@@ -160,6 +163,9 @@ const SortableMetricCard = memo(function SortableMetricCard({
 export default function AggregateWindow() {
   const [payload, setPayload] = useState<AggregateWindowPayload | null>(null);
   const [metrics, setMetrics] = useState<AggregateMetric[]>([]);
+  const [groupByColumns, setGroupByColumns] = useState<string[]>([]);
+  const [sourceFilter, setSourceFilter] = useState("");
+  const [selectedColumn, setSelectedColumn] = useState("");
   const metricCounterRef = useRef(0);
 
   const sensors = useSensors(
@@ -181,6 +187,8 @@ export default function AggregateWindow() {
       setPayload(p);
       const loaded = p.initialParams.metrics ?? [];
       setMetrics(loaded);
+      setGroupByColumns(p.initialParams.groupByColumns ?? []);
+      setSelectedColumn(p.initialParams.groupByColumns?.[0] ?? loaded[0]?.column ?? p.columns[0] ?? "");
       const maxId = loaded.reduce((max, m) => {
         const match = m.id.match(/^metric_(\d+)$/);
         return match ? Math.max(max, parseInt(match[1], 10) + 1) : max;
@@ -221,6 +229,17 @@ export default function AggregateWindow() {
   const handleColumnChange = useCallback((id: string, column: string) => setMetrics((ms) => ms.map((m) => (m.id === id ? { ...m, column } : m))), []);
   const handleAggregationChange = useCallback((id: string, aggregation: AggregateType) => setMetrics((ms) => ms.map((m) => (m.id === id ? { ...m, aggregation } : m))), []);
 
+  const toggleColumnAggregation = useCallback((column: string, aggregation: AggregateType) => {
+    setMetrics((current) => {
+      const existing = current.find((metric) => metric.column === column && metric.aggregation === aggregation);
+      if (existing) return current.filter((metric) => metric.id !== existing.id);
+      return [...current, { id: `metric_${metricCounterRef.current++}`, column, aggregation, ...(aggregation === "nth" ? { occurrence: 1 } : {}) }];
+    });
+  }, []);
+  const updateNthOccurrence = useCallback((column: string, occurrence: number) => {
+    setMetrics((current) => current.map((metric) => metric.column === column && metric.aggregation === "nth" ? { ...metric, occurrence: Math.max(1, occurrence || 1) } : metric));
+  }, []);
+
   const metricIds = useMemo(() => metrics.map((m) => m.id), [metrics]);
   const columns = payload?.columns ?? [];
 
@@ -234,9 +253,88 @@ export default function AggregateWindow() {
   const showEmpty = columns.length === 0;
 
   const handleApply = () => {
-    const params: AggregateParams = { metrics };
+    const params: AggregateParams = { metrics, ...(payload.mode === "groupBy" ? { groupByColumns } : {}) };
     window.alteraStudio.applyAggregate({ nodeId: payload.nodeId, params });
   };
+
+  if (payload.mode === "groupBy") {
+    const filteredColumns = columns.filter((column) => column.toLowerCase().includes(sourceFilter.trim().toLowerCase()));
+    const activeColumn = selectedColumn || columns[0] || "";
+    const activeAggregations = new Set(metrics.filter((metric) => metric.column === activeColumn).map((metric) => metric.aggregation));
+    const nthMetric = metrics.find((metric) => metric.column === activeColumn && metric.aggregation === "nth");
+
+    return (
+      <ConfigProvider theme={buildAntTheme(payload.theme)}>
+        <div className="group-by-window">
+          {showEmpty ? <EmptyState /> : (
+            <div className="group-by-layout">
+              <aside className="group-by-source-panel">
+                <div className="group-by-panel-heading">Available columns</div>
+                <input
+                  className="group-by-filter"
+                  value={sourceFilter}
+                  onChange={(event) => setSourceFilter(event.target.value)}
+                  placeholder="Filter columns..."
+                  aria-label="Filter available columns"
+                />
+                <div className="group-by-column-list">
+                  {filteredColumns.map((column) => (
+                    <button
+                      key={column}
+                      className={`group-by-source-row${groupByColumns[0] === column ? " selected" : ""}`}
+                      onClick={() => { setSelectedColumn(column); setGroupByColumns([column]); }}
+                    >
+                      <span>{column}</span>
+                    </button>
+                  ))}
+                </div>
+              </aside>
+
+              <section className="group-by-config-panel">
+                <div className="group-by-table-wrap">
+                  <table className="group-by-table">
+                    <thead><tr><th>Attributes</th><th>Aggregations</th></tr></thead>
+                    <tbody>
+                      {columns.map((column) => {
+                        const labels = metrics.filter((metric) => metric.column === column).map((metric) => AGGREGATION_OPTIONS.find((option) => option.value === metric.aggregation)?.label ?? metric.aggregation);
+                        return (
+                          <tr key={column} className={activeColumn === column ? "selected" : ""} onClick={() => setSelectedColumn(column)}>
+                            <td>{column}</td><td className={labels.length === 0 ? "group-by-no-aggregation" : undefined}>{labels.join(", ") || "—"}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="group-by-aggregations">
+                  <div className="group-by-panel-heading">Aggregations {activeColumn ? <span>for {activeColumn}</span> : null}</div>
+                  <div className="group-by-aggregation-grid">
+                    {AGGREGATION_OPTIONS.map((option) => (
+                      <label key={option.value} className="cleaner-checkbox-row group-by-aggregation-option">
+                        <input type="checkbox" checked={activeAggregations.has(option.value)} disabled={!activeColumn} onChange={() => activeColumn && toggleColumnAggregation(activeColumn, option.value)} />
+                        <span>{option.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                  {activeAggregations.has("nth") && (
+                    <div className="cleaner-param-row group-by-nth-control">
+                      <span className="cleaner-param-label">Occurrence:</span>
+                      <InputNumber min={1} value={nthMetric?.occurrence ?? 1} onChange={(value) => updateNthOccurrence(activeColumn, value ?? 1)} />
+                    </div>
+                  )}
+                </div>
+              </section>
+            </div>
+          )}
+          <div className="filter-builder-footer">
+            <button className="filter-builder-btn-secondary" onClick={() => window.alteraStudio.closeAggregateWindow()}>Cancel</button>
+            <button className="filter-builder-btn-primary" onClick={handleApply} disabled={showEmpty || metrics.length === 0 || groupByColumns.length === 0}>Apply</button>
+          </div>
+        </div>
+      </ConfigProvider>
+    );
+  }
 
   return (
     <ConfigProvider theme={buildAntTheme(payload?.theme ?? "light")}>
