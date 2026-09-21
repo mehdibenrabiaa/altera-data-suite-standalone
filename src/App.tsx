@@ -773,7 +773,7 @@ const DOCK_LAYOUT_STORAGE_KEY = "pdfConverter.dockLayout";
 // the toolbar's resize-lock forever. Only tab positions/groupings are meant
 // to survive across versions; structural panel config always comes fresh
 // from buildDefaultDockLayout().
-const DOCK_LAYOUT_VERSION = 12;
+const DOCK_LAYOUT_VERSION = 13;
 
 function buildDefaultDockLayout(): LayoutData {
   return {
@@ -794,7 +794,7 @@ function buildDefaultDockLayout(): LayoutData {
         // the `.dock-style-canvas-dock-panel` rules in App.css) so it doesn't
         // paint over or intercept clicks meant for the real canvas.
         {
-          tabs: [{ id: "canvas", title: "Canvas", content: <CanvasSlotContainer />, closable: false }],
+          tabs: [{ id: "canvas", group: "fixed", title: "Canvas", content: <CanvasSlotContainer />, closable: false }],
           panelLock: { panelStyle: "canvas-dock-panel", minWidth: 0, minHeight: 0 },
           size: 958,
         },
@@ -804,17 +804,17 @@ function buildDefaultDockLayout(): LayoutData {
           children: [
             {
               tabs: [
-                { id: "groups", title: "Layers", content: <GroupsPanelContainer />, closable: false, cached: true },
-                { id: "properties", title: "Properties", content: <PropertiesPanelContainer />, closable: false, cached: true },
-                { id: "nodes", title: "Nodes", content: <NodesPanelContainer />, closable: false, cached: true },
+                { id: "groups", group: "fixed", title: "Layers", content: <GroupsPanelContainer />, closable: false, cached: true },
+                { id: "properties", group: "fixed", title: "Properties", content: <PropertiesPanelContainer />, closable: false, cached: true },
+                { id: "nodes", group: "fixed", title: "Nodes", content: <NodesPanelContainer />, closable: false, cached: true },
               ],
               activeId: "groups",
               size: 356,
             },
             {
               tabs: [
-                { id: "smartrect", title: "Smart Rectangles", content: <SmartRectPanelContainer />, closable: false, cached: true },
-                { id: "nodeLog", title: "Log", content: <NodeLogPanelContainer />, closable: false, cached: true },
+                { id: "smartrect", group: "fixed", title: "Smart Rectangles", content: <SmartRectPanelContainer />, closable: false, cached: true },
+                { id: "nodeLog", group: "fixed", title: "Log", content: <NodeLogPanelContainer />, closable: false, cached: true },
               ],
               activeId: "smartrect",
               size: 341,
@@ -996,6 +996,9 @@ const KonvaA4Editor = () => {
   // baseline).
   const [pdfRenderDpi, setPdfRenderDpi] = useState<number>(288);
   const [theme, setTheme] = useState<"light" | "dark">("light");
+  // Whole-UI scale from Appearance's Widget Zoom (90/100/110) -- applied
+  // via the effect below, not read anywhere else in this component.
+  const [widgetZoom, setWidgetZoom] = useState<number>(100);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; rectId: string } | null>(null);
   // Smart-rectangle state
   const [smartPanelRectId, setSmartPanelRectId] = useState<string | null>(null);
@@ -1593,6 +1596,7 @@ const KonvaA4Editor = () => {
     // undefined/NaN DPI.
     setPdfRenderDpi(saved.pdfRenderDpi ?? 288);
     setTheme(saved.theme ?? "light");
+    setWidgetZoom(saved.widgetZoom ?? 100);
   }, []);
 
   useEffect(() => {
@@ -1604,6 +1608,13 @@ const KonvaA4Editor = () => {
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
   }, [theme]);
+
+  // Chromium's native page zoom, not this window's CSS -- see main.ts's
+  // "zoom:set" handler and its own comment for why this is a real
+  // webContents.setZoomFactor call rather than a transform/font-size hack.
+  useEffect(() => {
+    window.alteraStudio.setWidgetZoom(widgetZoom / 100);
+  }, [widgetZoom]);
 
   // Whatever was saved last session, loaded once on launch -- otherwise
   // every restart silently reverts to hardcoded defaults.
@@ -3690,8 +3701,9 @@ const KonvaA4Editor = () => {
       pdfRenderDpi,
       numPages,
       theme,
+      widgetZoom,
     });
-  }, [sampleConfig, closeAfterConvert, schemaSampleRowLimit, schemaPageLimit, autoExpandOutputDrawer, pdfRenderDpi, numPages, theme]);
+  }, [sampleConfig, closeAfterConvert, schemaSampleRowLimit, schemaPageLimit, autoExpandOutputDrawer, pdfRenderDpi, numPages, theme, widgetZoom]);
 
   const dockPanelsContextValue = useMemo<DockPanelsContextValue>(() => ({
     disabled: showSchema,
@@ -4424,7 +4436,8 @@ const KonvaA4Editor = () => {
               defaultLayout={initialDockLayout}
               onLayoutChange={handleDockLayoutChange}
               groups={{
-                toolbar: { floatable: true, maximizable: false },
+                toolbar: { floatable: false, maximizable: false },
+                fixed: { floatable: false, maximizable: false },
               }}
               style={{ position: "absolute", inset: 0, pointerEvents: "none", background: "transparent" }}
             />
@@ -4600,11 +4613,12 @@ const KonvaA4Editor = () => {
           >
             <span>Converting{conversionProgress != null ? `… ${conversionProgress}%` : "…"}</span>
             <div className="conversion-toast-track">
-              {conversionProgress != null ? (
-                <div className="conversion-toast-fill" style={{ width: `${conversionProgress}%` }} />
-              ) : (
-                <div className="conversion-toast-fill-indeterminate" />
-              )}
+              {/* Stays at 0% width (not a sliding "indeterminate" placeholder)
+                  during the brief gap before the first real WebSocket
+                  percentage arrives -- an animated placeholder in the same
+                  color/position as the real fill read as a misleading jump
+                  to some arbitrary percentage right before resetting to 0. */}
+              <div className="conversion-toast-fill" style={{ width: `${conversionProgress ?? 0}%` }} />
             </div>
           </div>
         )}

@@ -10,8 +10,7 @@ export default defineConfig({
       main: {
         entry: "electron/main.ts",
         onstart({ startup }) {
-          // --remote-debugging-port makes the dev window inspectable via CDP.
-          startup([".", "--no-sandbox", "--remote-debugging-port=9700"]);
+          startup([".", "--no-sandbox"]);
         },
       },
       preload: {

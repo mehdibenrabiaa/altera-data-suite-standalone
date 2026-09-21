@@ -371,6 +371,7 @@ declare global {
       onSettingsInit: (cb: (payload: SettingsPayload) => void) => () => void;
       saveSettings: (payload: SettingsPayload) => void;
       closeSettingsWindow: () => void;
+      setWidgetZoom: (factor: number) => void;
 
       // Main window: open (or focus/reseed) the separate Filter Builder
       // configure window for one node -- same "real native window, not an

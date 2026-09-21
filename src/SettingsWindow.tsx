@@ -8,7 +8,7 @@ import ActivationTab from "./components/ActivationTab";
 import AboutTab from "./components/AboutTab";
 import type { SystemVersionInfo } from "./components/ActivationTab";
 import type { SettingsPayload } from "./types";
-import type { AppearanceSettings, LicenseStatus, LicenseInfo } from "./settingsAppTypes";
+import type { LicenseStatus, LicenseInfo } from "./settingsAppTypes";
 import styles from "./styles/Settings.module.css";
 
 const ANT_THEME_BASE = {
@@ -34,7 +34,7 @@ const ANT_THEME_BASE = {
 // Activation is also real: it talks to this app's own FastAPI backend
 // (backend/app/routers/licensing.py), a direct port of the Qt widgets'
 // real licensing logic and the same production license server. Appearance
-// is still a demo -- its toggles aren't wired to anything yet.
+// is real too now -- Theme and Widget Zoom are both SettingsPayload fields.
 // Dev-only fallback so this window is inspectable in a plain browser tab
 // (window.alteraStudio doesn't exist outside Electron's preload bridge) --
 // same spirit as ActivationTab's own window.qt-less dev simulation.
@@ -47,6 +47,7 @@ const DEV_FALLBACK_VALUES: SettingsPayload = {
   pdfRenderDpi: 288,
   numPages: 0,
   theme: "light",
+  widgetZoom: 100,
 };
 
 // Same light/dark tokens as App.css's [data-theme] block (see that file's
@@ -108,22 +109,14 @@ export default function SettingsWindow() {
 
   const [activeTab, setActiveTab] = useState("preferences");
 
-  // ── Appearance/Activation/About state -- ported verbatim from
-  // devkit/settings/src/components/Settings.tsx. Not persisted anywhere
-  // (Appearance's own comment there notes it's demo-only; a real
-  // Electron-side wiring is a separate piece of work). ──
-  const [appearance, setAppearance] = useState<AppearanceSettings>({
-    zoom: 90,
-  });
+  // ── Activation/About state -- ported verbatim from
+  // devkit/settings/src/components/Settings.tsx. ──
   const [systemInfo, setSystemInfo] = useState<SystemVersionInfo | null>(null);
   // Only the setter is used -- ActivationTab now owns its own status (it
   // fetches from the real backend on mount) and just mirrors updates up via
   // onStatusChange for any future consumer; nothing here reads the value.
   const [, setLicenseStatus] = useState<LicenseStatus>({ state: "invalid" });
 
-  const handleAppearanceChange = <K extends keyof AppearanceSettings>(key: K, value: AppearanceSettings[K]): void => {
-    setAppearance((prev) => ({ ...prev, [key]: value }));
-  };
   const handleActivate = (info: LicenseInfo): void => {
     setLicenseStatus({ state: "valid", ...info });
   };
@@ -160,8 +153,8 @@ export default function SettingsWindow() {
       label: "Appearance",
       children: (
         <AppearanceTab
-          settings={appearance}
-          onChange={handleAppearanceChange}
+          zoom={values.widgetZoom}
+          onZoomChange={(v) => update({ widgetZoom: v })}
           theme={values.theme}
           onThemeChange={(v) => update({ theme: v })}
         />

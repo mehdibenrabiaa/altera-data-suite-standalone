@@ -5,27 +5,24 @@ import {
   DesktopOutlined,
 } from "@ant-design/icons";
 import SectionCard from "./SectionCard";
-import type { AppearanceSettings, AppearanceSettingChangeHandler } from "../settingsAppTypes";
 import styles from "../styles/Settings.module.css";
 
 const { Text } = Typography;
 
 interface AppearanceTabProps {
-  settings: AppearanceSettings;
-  onChange: AppearanceSettingChangeHandler;
-  // Real, persisted setting (SettingsPayload.theme) -- unlike Widget Zoom
-  // below, which is still the ported demo (see this file's own settings/
-  // onChange props above, a separate AppearanceSettings shape that never
-  // reaches disk). Passed in separately from SettingsWindow.tsx rather
-  // than folded into AppearanceSettings, so it keeps writing to the same
-  // real settings.json field PreferencesTab used to own.
+  // Both real, persisted SettingsPayload fields (widgetZoom/theme) --
+  // passed in directly from SettingsWindow.tsx rather than through a
+  // separate demo-only shape, so they keep writing to the same real
+  // settings.json fields PreferencesTab's other controls use.
+  zoom: number;
+  onZoomChange: (zoom: number) => void;
   theme: "light" | "dark";
   onThemeChange: (theme: "light" | "dark") => void;
 }
 
 const AppearanceTab: React.FC<AppearanceTabProps> = ({
-  settings,
-  onChange,
+  zoom,
+  onZoomChange,
   theme,
   onThemeChange,
 }) => {
@@ -61,12 +58,12 @@ const AppearanceTab: React.FC<AppearanceTabProps> = ({
               max={110}
               step={10}
               marks={{ 90: "90%", 100: "100%", 110: "110%" }}
-              value={settings.zoom}
-              onChange={(value) => onChange("zoom", value)}
+              value={zoom}
+              onChange={(value) => onZoomChange(value)}
               style={{ width: 130 }}
               tooltip={{ open: false }}
             />
-            <Text className={styles.sliderValue}>{settings.zoom}%</Text>
+            <Text className={styles.sliderValue}>{zoom}%</Text>
           </Space>
         </div>
       </SectionCard>

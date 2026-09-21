@@ -428,39 +428,85 @@ interface TableNodeData {
 }
 
 // Double-click a column name to rename it in place -- Enter/blur commits,
-// Escape cancels. Local to one row so only the row being edited re-renders.
-function TableColumnRow({ original, display, onRename }: { original: string; display: string; onRename?: (originalCol: string, newName: string) => void }) {
-  const [editing, setEditing] = useState(false);
+// Escape cancels, Tab/Shift+Tab commits and moves into the next/previous
+// row (edit state lives in the parent TableNode, keyed by column index, so
+// that Tab can hand editing off between rows -- see its own comment).
+function TableColumnRow({
+  original,
+  display,
+  onRename,
+  editing,
+  onStartEditing,
+  onStopEditing,
+  onTabNext,
+  onTabPrev,
+}: {
+  original: string;
+  display: string;
+  onRename?: (originalCol: string, newName: string) => void;
+  editing: boolean;
+  onStartEditing: () => void;
+  onStopEditing: () => void;
+  onTabNext: () => void;
+  onTabPrev: () => void;
+}) {
   const [draft, setDraft] = useState(display);
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  // Set synchronously by the keydown handler right before it already deals
+  // with committing/moving on, so the blur that follows (either from the
+  // row unmounting back to its plain <div>, or -- Escape's case -- from
+  // nothing at all) doesn't also re-run commit/onStopEditing and clobber
+  // whatever row Tab just handed editing to.
+  const handledByKeyRef = useRef(false);
 
   useEffect(() => {
     if (editing) {
       setDraft(display);
-      // Focus after the input has actually mounted, and select its text so
-      // typing immediately replaces it (same "ready to type over" feel as
-      // renaming a layer/table elsewhere in the app).
-      requestAnimationFrame(() => inputRef.current?.select());
+      handledByKeyRef.current = false;
     }
   }, [editing, display]);
 
-  const commit = () => {
-    setEditing(false);
-    onRename?.(original, draft);
-  };
+  const commit = () => onRename?.(original, draft);
 
   if (editing) {
     return (
       <div className="schema-table-column-row editing nodrag">
         <input
-          ref={inputRef}
+          // autoFocus (applied synchronously as the input is inserted,
+          // same technique as GroupsPanel's rect-rename Tab-to-next) rather
+          // than a ref + requestAnimationFrame -- deferring focus by a
+          // frame left a brief gap, right after Tab hands editing to the
+          // next row, where nothing has focus yet. A fast Tab landing in
+          // that gap saw e.target that wasn't an input, so App.tsx's
+          // global Tab handler (Canvas <-> Workflow toggle) fired instead
+          // of being skipped.
+          autoFocus
+          onFocus={(e) => e.target.select()}
           className="schema-column-name-input"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          onBlur={commit}
+          onBlur={() => {
+            if (handledByKeyRef.current) return;
+            commit();
+            onStopEditing();
+          }}
           onKeyDown={(e) => {
-            if (e.key === "Enter") { e.preventDefault(); commit(); }
-            if (e.key === "Escape") { e.preventDefault(); setEditing(false); }
+            if (e.key === "Enter") {
+              e.preventDefault();
+              handledByKeyRef.current = true;
+              commit();
+              onStopEditing();
+            }
+            if (e.key === "Escape") {
+              e.preventDefault();
+              handledByKeyRef.current = true;
+              onStopEditing();
+            }
+            if (e.key === "Tab") {
+              e.preventDefault();
+              handledByKeyRef.current = true;
+              commit();
+              if (e.shiftKey) onTabPrev(); else onTabNext();
+            }
           }}
           onClick={(e) => e.stopPropagation()}
         />
@@ -475,7 +521,7 @@ function TableColumnRow({ original, display, onRename }: { original: string; dis
         // pane, which zooms in on double-click by default (zoomOnDoubleClick)
         // -- same reason the editing branch's wrapper above carries nodrag.
         e.stopPropagation();
-        if (onRename) setEditing(true);
+        if (onRename) onStartEditing();
       }}
     >
       <span className="schema-column-name">{display}</span>
@@ -489,7 +535,7 @@ function TableColumnRow({ original, display, onRename }: { original: string; dis
             // a plain click landing on the pane (if it ever bubbled that
             // far) would otherwise be read as a canvas click, not a rename.
             e.stopPropagation();
-            setEditing(true);
+            onStartEditing();
           }}
         >
           {/* Inline (not <img src="./pen-line.svg">) specifically so
@@ -513,6 +559,13 @@ function TableColumnRow({ original, display, onRename }: { original: string; dis
 // only ever a data source, never a destination, so it gets an output
 // handle only -- no input side (see ProcessorNode for the in+out case).
 function TableNode({ data }: NodeProps<Node<TableNodeData>>) {
+  // Which column row (by index into data.columns) is being renamed, if any
+  // -- lifted up here (rather than local to each row, as it used to be) so
+  // Tab can commit the current row and hand editing off to the next/
+  // previous one.
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const lastIndex = data.columns.length - 1;
+
   return (
     <div className="schema-table-card node-port-anchor">
       <div className="schema-table-header" style={{ borderLeftColor: data.color }}>
@@ -523,12 +576,17 @@ function TableNode({ data }: NodeProps<Node<TableNodeData>>) {
         <div className="schema-table-meta">{data.rowCount} row{data.rowCount === 1 ? "" : "s"} (sample)</div>
       )}
       <div className="schema-table-columns">
-        {data.columns.map((col) => (
+        {data.columns.map((col, i) => (
           <TableColumnRow
             key={col}
             original={col}
             display={data.columnRenames?.[col] ?? col}
             onRename={data.onRenameColumn}
+            editing={editingIndex === i}
+            onStartEditing={() => setEditingIndex(i)}
+            onStopEditing={() => setEditingIndex(null)}
+            onTabNext={() => setEditingIndex(i < lastIndex ? i + 1 : null)}
+            onTabPrev={() => setEditingIndex(i > 0 ? i - 1 : null)}
           />
         ))}
       </div>
@@ -3166,7 +3224,7 @@ export default function SchemaView({
   // processor node's) data. Table lookups go through displayTables rather
   // than the node's own data, via findDisplayTableByNodeId (the same
   // rect-id-based scheme a table card's own node id is derived from).
-  const [outputDrawerExpanded, setOutputDrawerExpanded] = useState(false);
+  const [outputDrawerExpanded, setOutputDrawerExpanded] = useState(true);
   const [drawerHeight, setDrawerHeight] = useState(DRAWER_DEFAULT_HEIGHT);
   const selectedTable = useMemo(() => {
     if (selectedProcessorNode) {

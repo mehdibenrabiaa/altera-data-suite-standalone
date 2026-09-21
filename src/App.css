@@ -243,18 +243,6 @@ button:focus-visible {
   background: #FE4D41;
   transition: width 0.3s ease;
 }
-.conversion-toast-fill-indeterminate {
-  height: 100%;
-  width: 40%;
-  background: #FE4D41;
-  animation: conversion-toast-slide 1.4s ease-in-out infinite;
-}
-@keyframes conversion-toast-slide {
-  0%   { transform: translateX(-100%); }
-  50%  { transform: translateX(250%); }
-  100% { transform: translateX(250%); }
-}
-
 .container {
   width: 100vw;
   height: 100vh;
@@ -3684,7 +3672,7 @@ body.dock-dragging .dock-style-canvas-dock-panel {
   align-items: center;
   gap: 6px;
   max-width: 150px;
-  color: #222222;
+  color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -5536,6 +5524,10 @@ body.dock-dragging .dock-style-canvas-dock-panel {
 }
 
 .nav-btn-disabled img {
+  filter: invert(1);
+}
+
+[data-theme="dark"] .page-nav-arrow img {
   filter: invert(1);
 }
 

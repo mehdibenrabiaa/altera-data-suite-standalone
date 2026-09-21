@@ -50,6 +50,11 @@ contextBridge.exposeInMainWorld("alteraStudio", {
   closeSettingsWindow: (): void => {
     ipcRenderer.send("settings:close");
   },
+  // Main window: applies the Appearance tab's Widget Zoom (a 0.9/1.0/1.1
+  // factor) via Chromium's native page zoom -- see main.ts's "zoom:set".
+  setWidgetZoom: (factor: number): void => {
+    ipcRenderer.send("zoom:set", factor);
+  },
 
   // Main window: open (or focus/reseed) the separate Filter Builder
   // configure window for one node.

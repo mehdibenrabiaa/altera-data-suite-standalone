@@ -1,5 +1,28 @@
 import type { QtBridge, SchemaPreviewTable } from "./types";
 
+// Guards connectProgressSocket below against ever opening more than one real
+// WebSocket for the app's lifetime -- see its call site's comment.
+let progressSocketStarted = false;
+
+function connectProgressSocket(base: string) {
+  const wsUrl = base.replace(/^http/, "ws") + "/ws";
+  const ws = new WebSocket(wsUrl);
+  ws.onmessage = (ev) => {
+    try {
+      const msg = JSON.parse(ev.data);
+      if (msg.type === "progress") {
+        (window as unknown as { setConversionProgress?: (pct: number) => void })
+          .setConversionProgress?.(msg.pct);
+      }
+    } catch {
+      // ignore malformed frames
+    }
+  };
+  ws.onclose = () => {
+    setTimeout(() => connectProgressSocket(base), 1000);
+  };
+}
+
 // Stand-in for the Python QWebChannel bridge (`_Br` in pdf_converter.py) that
 // the Orange-hosted widget used. There is no Qt/QWebEngine host here, so each
 // method talks to the local FastAPI backend directly, then feeds results back
@@ -20,25 +43,22 @@ export function createBackendBridge(): QtBridge {
   // now; any future node's live status later) -- one connection for the
   // app's lifetime, reconnecting on drop since the backend can briefly be
   // unreachable right after launch or during a dev restart.
-  function connectProgressSocket() {
-    const wsUrl = base.replace(/^http/, "ws") + "/ws";
-    const ws = new WebSocket(wsUrl);
-    ws.onmessage = (ev) => {
-      try {
-        const msg = JSON.parse(ev.data);
-        if (msg.type === "progress") {
-          (window as unknown as { setConversionProgress?: (pct: number) => void })
-            .setConversionProgress?.(msg.pct);
-        }
-      } catch {
-        // ignore malformed frames
-      }
-    };
-    ws.onclose = () => {
-      setTimeout(connectProgressSocket, 1000);
-    };
+  //
+  // createBackendBridge() runs from useQtBridge's useState lazy initializer
+  // (see App.tsx), which React 19 StrictMode double-invokes in dev -- unlike
+  // every other window's useEffect-based init (see e.g. CascadeFillWindow.tsx's
+  // own StrictMode comment), there's no cleanup hook here to close the extra
+  // socket, so without this guard two independent /ws connections stayed open
+  // for the app's whole lifetime. Both replayed the same broadcasts, but as
+  // two unrelated TCP connections they had no ordering guarantee relative to
+  // each other -- exactly what produced the conversion progress bar jumping
+  // to some value, dropping back down, then climbing again. The module-level
+  // flag makes the connection idempotent regardless of how many times this
+  // function runs.
+  if (!progressSocketStarted) {
+    progressSocketStarted = true;
+    connectProgressSocket(base);
   }
-  connectProgressSocket();
 
   return {
     saveHtmlState() {

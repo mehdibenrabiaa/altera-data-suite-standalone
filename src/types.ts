@@ -72,6 +72,13 @@ export interface SettingsPayload {
   // separate window too. Defaults to "light" for settings.json files saved
   // before this existed (see applyPersistedSettings's ?? fallback).
   theme: "light" | "dark";
+  // Whole-UI scale (90/100/110), applied via Electron's native
+  // webContents.setZoomFactor (see App.tsx's widgetZoom effect and
+  // electron/main.ts's "zoom:set" handler) -- not the Canvas view's own
+  // separate PDF-page zoom (handleZoomIn/handleZoomOut/scale state), which
+  // this has no effect on. Defaults to 100 for settings.json files saved
+  // before this existed (see applyPersistedSettings's ?? fallback).
+  widgetZoom: number;
 }
 
 // What actually gets written to disk (see electron/main.ts's

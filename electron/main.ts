@@ -247,6 +247,17 @@ ipcMain.on("settings:save", (_event, payload) => {
   });
 });
 
+// Widget Zoom (Appearance tab) -- Chromium's own native page zoom, the
+// same mechanism as a browser's Ctrl+/Ctrl- (crisp at any factor, reflows
+// layout rather than blurrily scaling a rendered bitmap). Distinct from the
+// Canvas view's own PDF-page zoom, which is plain React state
+// (App.tsx's `scale`) and never touches webContents at all. App.tsx sends
+// this once on launch (with the persisted value) and again immediately on
+// every Appearance-tab change, live-previewed before Save like theme is.
+ipcMain.on("zoom:set", (_event, factor: number) => {
+  win?.webContents.setZoomFactor(factor);
+});
+
 ipcMain.on("settings:close", () => {
   settingsWin?.hide();
 });
