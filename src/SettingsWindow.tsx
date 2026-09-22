@@ -56,27 +56,27 @@ const DEV_FALLBACK_VALUES: SettingsPayload = {
 // ConfigProvider tokens need the equivalent values duplicated here.
 const ANT_THEME_TOKENS = {
   light: {
-    colorBorder: "#e0e0e0",
+    colorBorder: "#d2d6dd",
     // Tabs' own nav-underline divider reads from this, separately from
     // colorBorder above -- left at antd's own light default until now, so
     // dark mode never actually touched it either.
-    colorBorderSecondary: "#e0e0e0",
+    colorBorderSecondary: "#d2d6dd",
     colorPrimaryHover: "#bbb",
     colorPrimary: "#FE4D41",
-    colorText: "#1a1a1a",
+    colorText: "#1b1f27",
     colorTextPlaceholder: "#999",
     colorBgContainer: "#ffffff",
     colorBgElevated: "#ffffff",
   },
   dark: {
-    colorBorder: "#454545",
-    colorBorderSecondary: "#454545",
+    colorBorder: "#404040",
+    colorBorderSecondary: "#404040",
     colorPrimaryHover: "#ff8177",
     colorPrimary: "#FE4D41",
     colorText: "#e8e8e8",
     colorTextPlaceholder: "#8a8a8a",
-    colorBgContainer: "#2b2b2b",
-    colorBgElevated: "#333333",
+    colorBgContainer: "#1e1e1e",
+    colorBgElevated: "#252526",
   },
 };
 

@@ -25,7 +25,7 @@ import "./App.css";
 
 import { LoadingOutlined } from "@ant-design/icons";
 import DockLayout from "rc-dock";
-import type { LayoutData } from "rc-dock";
+import type { LayoutData, TabGroup } from "rc-dock";
 import "rc-dock/dist/rc-dock.css";
 import "./rcDockPatches";
 import ToolbarPanel from "./panels/ToolbarPanel";
@@ -766,35 +766,96 @@ function NodeLogPanelContainer() {
 }
 
 const DOCK_LAYOUT_STORAGE_KEY = "pdfConverter.dockLayout";
+// Which named preset the Layout switcher last had selected (see
+// DockLayoutPreset below) -- separate from DOCK_LAYOUT_STORAGE_KEY, which
+// tracks the actual panel sizes/positions and updates on every resize.
+const DOCK_LAYOUT_PRESET_KEY = "pdfConverter.dockLayoutPreset";
 // Bump this whenever a panel's structural config changes (panelLock, group,
 // closable, default size/position, etc.) — a mismatched version means the
 // saved layout predates that change and must NOT be trusted, otherwise a
 // browser holding an old snapshot would silently keep overriding fixes like
 // the toolbar's resize-lock forever. Only tab positions/groupings are meant
 // to survive across versions; structural panel config always comes fresh
-// from buildDefaultDockLayout().
-const DOCK_LAYOUT_VERSION = 13;
+// from buildDockLayout().
+// Bumped for the switch to a Photoshop-style fixed workspace (locked tab
+// groups, see the "groups" prop passed to <DockLayout> below) -- a saved
+// layout from before that change could still carry the old, draggable
+// "fixed" group name and would silently un-lock itself on load.
+const DOCK_LAYOUT_VERSION = 14;
 
-function buildDefaultDockLayout(): LayoutData {
+// Every group a tab can belong to is locked down the same way: no floating,
+// no maximizing, and no dragging a tab out to create a new split panel
+// (tabLocked -- see DockData.d.ts's own doc on it). Every PANEL (not tab --
+// several tabs sharing one panel still share its group) also gets its own
+// unique group among whatever's simultaneously on screen, which closes the
+// one gap tabLocked alone leaves open: its doc notes a locked tab can still
+// be dropped into a *different* panel that happens to share its group. With
+// no two on-screen panels ever sharing a group, there's nowhere left for a
+// dragged tab to land at all -- exactly the "can't dock or undock, just
+// click to switch tabs" feel a fixed Photoshop-style workspace wants.
+// "dock-a/b/c" are generic (not preset-specific) since which tabs land in
+// which of them differs per preset below -- reused across presets rather
+// than one-off named per preset, since only one preset is ever mounted at
+// a time so nothing actually collides.
+const LOCKED_GROUP: TabGroup = { floatable: false, maximizable: false, tabLocked: true };
+const DOCK_GROUPS: Record<string, TabGroup> = {
+  toolbar: LOCKED_GROUP,
+  "canvas-fixed": LOCKED_GROUP,
+  "dock-a": LOCKED_GROUP,
+  "dock-b": LOCKED_GROUP,
+  "dock-c": LOCKED_GROUP,
+};
+
+type DockLayoutPreset = "standard" | "workflow" | "canvas-focus";
+const DOCK_LAYOUT_PRESET_LABELS: Record<DockLayoutPreset, string> = {
+  standard: "Standard",
+  workflow: "Workflow",
+  "canvas-focus": "Canvas Focus",
+};
+
+// The Konva Stage itself is still rendered as a plain fixed-position
+// sibling outside the dock tree (Konva doesn't need to live inside rc-
+// dock's own box layout) -- but it continuously mirrors this tab's live
+// bounding rect (see CanvasSlotContainer/setCanvasSlotEl), so it visually
+// resizes and repositions right along with whatever docks around it. This
+// tab itself stays invisible and click-through (see the
+// `.dock-style-canvas-dock-panel` rules in App.css) so it doesn't paint
+// over or intercept clicks meant for the real canvas. Same tab in every
+// preset below, just wrapped at a different size/position each time.
+function canvasTab() {
+  return { id: "canvas", group: "canvas-fixed", title: "Canvas", content: <CanvasSlotContainer />, closable: false };
+}
+function toolbarPanel() {
+  return {
+    tabs: [{ id: "toolbar", group: "toolbar", title: <ToolbarGripIcon />, content: <ToolbarPanelContainer />, closable: false, cached: true }],
+    size: 52,
+  };
+}
+const layersTab = () => ({ id: "groups", group: "dock-a", title: "Layers", content: <GroupsPanelContainer />, closable: false, cached: true });
+const propertiesTab = () => ({ id: "properties", group: "dock-a", title: "Properties", content: <PropertiesPanelContainer />, closable: false, cached: true });
+const nodesTab = () => ({ id: "nodes", group: "dock-a", title: "Nodes", content: <NodesPanelContainer />, closable: false, cached: true });
+const smartRectTab = () => ({ id: "smartrect", group: "dock-a", title: "Smart Rectangles", content: <SmartRectPanelContainer />, closable: false, cached: true });
+const nodeLogTab = () => ({ id: "nodeLog", group: "dock-a", title: "Log", content: <NodeLogPanelContainer />, closable: false, cached: true });
+// Tags each tab in `tabs` with `group` -- lets the tab-builder functions
+// above stay group-agnostic (always "dock-a") while each preset below
+// assigns its own actual group per panel, since which tabs share a panel
+// (and therefore a group) differs per preset.
+function withGroup<T extends { group: string }>(tabs: T[], group: string): T[] {
+  return tabs.map((t) => ({ ...t, group }));
+}
+
+// Same panel/tab arrangement as before: toolbar strip, then canvas, then a
+// right sidebar split top {Layers, Properties, Nodes} / bottom {Smart
+// Rectangles, Log}. General-purpose default.
+function buildStandardLayout(): LayoutData {
   return {
     dockbox: {
       mode: "horizontal",
       size: 900,
       children: [
+        toolbarPanel(),
         {
-          tabs: [{ id: "toolbar", group: "toolbar", title: <ToolbarGripIcon />, content: <ToolbarPanelContainer />, closable: false, cached: true }],
-          size: 52,
-        },
-        // The Konva Stage itself is still rendered as a plain fixed-position
-        // sibling outside this dock tree (Konva doesn't need to live inside
-        // rc-dock's own box layout) — but it continuously mirrors this tab's
-        // live bounding rect (see CanvasSlotContainer/setCanvasSlotEl), so it
-        // visually resizes and repositions right along with whatever docks
-        // around it. This tab itself stays invisible and click-through (see
-        // the `.dock-style-canvas-dock-panel` rules in App.css) so it doesn't
-        // paint over or intercept clicks meant for the real canvas.
-        {
-          tabs: [{ id: "canvas", group: "fixed", title: "Canvas", content: <CanvasSlotContainer />, closable: false }],
+          tabs: [canvasTab()],
           panelLock: { panelStyle: "canvas-dock-panel", minWidth: 0, minHeight: 0 },
           size: 958,
         },
@@ -802,37 +863,142 @@ function buildDefaultDockLayout(): LayoutData {
           mode: "vertical",
           size: 332,
           children: [
-            {
-              tabs: [
-                { id: "groups", group: "fixed", title: "Layers", content: <GroupsPanelContainer />, closable: false, cached: true },
-                { id: "properties", group: "fixed", title: "Properties", content: <PropertiesPanelContainer />, closable: false, cached: true },
-                { id: "nodes", group: "fixed", title: "Nodes", content: <NodesPanelContainer />, closable: false, cached: true },
-              ],
-              activeId: "groups",
-              size: 356,
-            },
-            {
-              tabs: [
-                { id: "smartrect", group: "fixed", title: "Smart Rectangles", content: <SmartRectPanelContainer />, closable: false, cached: true },
-                { id: "nodeLog", group: "fixed", title: "Log", content: <NodeLogPanelContainer />, closable: false, cached: true },
-              ],
-              activeId: "smartrect",
-              size: 341,
-            },
+            { tabs: withGroup([layersTab(), propertiesTab(), nodesTab()], "dock-a"), activeId: "groups", size: 356 },
+            { tabs: withGroup([smartRectTab(), nodeLogTab()], "dock-b"), activeId: "smartrect", size: 341 },
           ],
         },
       ],
     },
-    floatbox: {
-      mode: "float",
-      children: [],
-    },
+    floatbox: { mode: "float", children: [] },
   } as unknown as LayoutData;
+}
+
+// Built for working the node graph: the Nodes catalog (what you drag onto
+// the Workflow canvas) and the run Log live in their own panels on the
+// LEFT, right next to the canvas they act on, each big enough to work
+// from directly instead of buried behind other tabs. Layers/Properties/
+// Smart Rectangles -- all Canvas-view (PDF annotation) concerns, not
+// Workflow ones -- move together into one secondary panel on the right.
+function buildWorkflowLayout(): LayoutData {
+  return {
+    dockbox: {
+      mode: "horizontal",
+      size: 900,
+      children: [
+        toolbarPanel(),
+        {
+          mode: "vertical",
+          size: 280,
+          children: [
+            { tabs: withGroup([nodesTab()], "dock-a"), activeId: "nodes", size: 420 },
+            { tabs: withGroup([nodeLogTab()], "dock-b"), activeId: "nodeLog", size: 300 },
+          ],
+        },
+        {
+          tabs: [canvasTab()],
+          panelLock: { panelStyle: "canvas-dock-panel", minWidth: 0, minHeight: 0 },
+          size: 980,
+        },
+        {
+          tabs: withGroup([layersTab(), propertiesTab(), smartRectTab()], "dock-c"),
+          activeId: "properties",
+          size: 260,
+        },
+      ],
+    },
+    floatbox: { mode: "float", children: [] },
+  } as unknown as LayoutData;
+}
+
+// Every panel tab merged into ONE slim panel so the canvas gets as much
+// room as possible -- for reviewing/annotating a PDF rather than actively
+// juggling several panels at once. Nothing is hidden (every tab from the
+// other two presets is still one click away), it's just not spread across
+// two panels anymore.
+function buildCanvasFocusLayout(): LayoutData {
+  return {
+    dockbox: {
+      mode: "horizontal",
+      size: 900,
+      children: [
+        toolbarPanel(),
+        {
+          tabs: [canvasTab()],
+          panelLock: { panelStyle: "canvas-dock-panel", minWidth: 0, minHeight: 0 },
+          size: 1360,
+        },
+        {
+          tabs: withGroup([layersTab(), propertiesTab(), nodesTab(), smartRectTab(), nodeLogTab()], "dock-a"),
+          activeId: "groups",
+          size: 220,
+        },
+      ],
+    },
+    floatbox: { mode: "float", children: [] },
+  } as unknown as LayoutData;
+}
+
+function buildDockLayout(preset: DockLayoutPreset = "standard"): LayoutData {
+  switch (preset) {
+    case "workflow": return buildWorkflowLayout();
+    case "canvas-focus": return buildCanvasFocusLayout();
+    default: return buildStandardLayout();
+  }
+}
+
+function LayoutSwitcherIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="7" height="18" rx="1" />
+      <rect x="12" y="3" width="9" height="8" rx="1" />
+      <rect x="12" y="13" width="9" height="8" rx="1" />
+    </svg>
+  );
+}
+// Photoshop-style "Workspace" switcher -- picks one of DOCK_LAYOUT_PRESET_SIZES
+// via handleSelectDockLayoutPreset. Rendered twice by KonvaA4Editor below: once
+// docked into the in-page MenuBar's strip on Windows/Linux, once as a floating
+// pill on macOS (which has no in-page menu bar to sit in -- see isMac).
+function LayoutSwitcher({ value, onChange }: { value: DockLayoutPreset; onChange: (preset: DockLayoutPreset) => void }) {
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onClickOutside = (e: MouseEvent) => {
+      if (!wrapperRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    window.addEventListener("mousedown", onClickOutside);
+    return () => window.removeEventListener("mousedown", onClickOutside);
+  }, [open]);
+
+  return (
+    <div className="layout-switcher" ref={wrapperRef}>
+      <button className="layout-switcher-btn" onClick={() => setOpen((o) => !o)} title="Workspace layout">
+        <LayoutSwitcherIcon />
+        <span>{DOCK_LAYOUT_PRESET_LABELS[value]}</span>
+      </button>
+      {open && (
+        <div className="menu-bar-dropdown layout-switcher-dropdown">
+          {(Object.keys(DOCK_LAYOUT_PRESET_LABELS) as DockLayoutPreset[]).map((preset) => (
+            <div key={preset} className="ctx-menu-item" onClick={() => { onChange(preset); setOpen(false); }}>
+              <span>{DOCK_LAYOUT_PRESET_LABELS[preset]}</span>
+              {preset === value && <span className="ctx-menu-shortcut">✓</span>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ── Main editor ───────────────────────────────────────────────────────────────
 const KonvaA4Editor = () => {
   const { bridge, isReady } = useQtBridge();
+  // macOS gets a real native File/Edit/Help menu (see main.ts's
+  // buildNativeMenu) instead of this file's own in-page MenuBar --
+  // skipped below, and its clicks are dispatched via the onMenuAction
+  // effect further down instead of MenuBar's direct prop callbacks.
+  const isMac = window.alteraStudio.platform === "darwin";
 
   const [scale, setScale] = useState(1);
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
@@ -1070,6 +1236,14 @@ const KonvaA4Editor = () => {
     window.addEventListener("resize", measureCanvasSlot);
     return () => window.removeEventListener("resize", measureCanvasSlot);
   }, [measureCanvasSlot]);
+  // Which preset the Layout switcher (see LayoutSwitcher below) currently
+  // shows as active -- purely a UI label/highlight concern, since the real
+  // panel sizes/positions already round-trip through DOCK_LAYOUT_STORAGE_KEY
+  // regardless of preset (a preset switch is just a one-time resize, see
+  // buildDockLayout's own comment).
+  const [dockLayoutPreset, setDockLayoutPreset] = useState<DockLayoutPreset>(
+    () => (localStorage.getItem(DOCK_LAYOUT_PRESET_KEY) as DockLayoutPreset | null) ?? "standard",
+  );
   const [initialDockLayout] = useState<LayoutData>(() => {
     try {
       const raw = localStorage.getItem(DOCK_LAYOUT_STORAGE_KEY);
@@ -1079,14 +1253,14 @@ const KonvaA4Editor = () => {
           // Merge saved positions/sizes back with fresh (live) tab content —
           // content elements aren't JSON-serializable, so `saveLayout()` only
           // persisted structure; the containers below re-supply live content.
-          return DockLayout.loadLayoutData(parsed.layout, { defaultLayout: buildDefaultDockLayout() });
+          return DockLayout.loadLayoutData(parsed.layout, { defaultLayout: buildDockLayout(dockLayoutPreset) });
         }
         // Version mismatch (or pre-versioning data): the saved snapshot may
         // carry stale panel-level config (e.g. missing panelLock), so discard
         // it rather than let it silently override current defaults forever.
       }
     } catch { /* ignore malformed saved layout */ }
-    return buildDefaultDockLayout();
+    return buildDockLayout(dockLayoutPreset);
   });
   const handleDockLayoutChange = useCallback(() => {
     const dock = dockLayoutRef.current;
@@ -1099,6 +1273,19 @@ const KonvaA4Editor = () => {
     // a frame so rc-dock's own re-render has already committed.
     requestAnimationFrame(measureCanvasSlot);
   }, [measureCanvasSlot]);
+  // Layout switcher (see LayoutSwitcher below) -- loadLayout() itself is
+  // imperative and, per rc-dock's own docs, doesn't fire onLayoutChange, so
+  // the persistence + re-measure handleDockLayoutChange already does on
+  // every drag-resize needs to be called explicitly here too, or picking a
+  // preset would "forget" itself on the next reload.
+  const handleSelectDockLayoutPreset = useCallback((preset: DockLayoutPreset) => {
+    const dock = dockLayoutRef.current;
+    if (!dock) return;
+    dock.loadLayout(buildDockLayout(preset));
+    setDockLayoutPreset(preset);
+    localStorage.setItem(DOCK_LAYOUT_PRESET_KEY, preset);
+    handleDockLayoutChange();
+  }, [handleDockLayoutChange]);
   const renderTimeoutRef = useRef<number | null>(null);
   // Set right before the initial-load renderPage() call so the debounced
   // "re-render at current zoom resolution" effect below doesn't immediately
@@ -1364,6 +1551,44 @@ const KonvaA4Editor = () => {
   // file -- plain "Save" prompts for a location (acts like "Save As") the
   // first time, then writes straight to this path on every save after.
   const [currentProjectPath, setCurrentProjectPath] = useState<string | null>(null);
+  // Unsaved-changes tracking -- mirrored to the main process below so it
+  // can prompt Save/Don't Save/Cancel before actually closing the window
+  // (see electron/main.ts's win.on("close", ...)), instead of silently
+  // discarding whatever hasn't been saved like this app used to.
+  const [isDirty, setIsDirty] = useState(false);
+  const hasMountedDirtyTrackingRef = useRef(false);
+  // True for the whole span of a state-restoring operation (loading a
+  // project, applying persisted settings on launch, ...) rather than
+  // "loading" state being a real edit -- callers set this true before the
+  // first of possibly several setState batches an async restore makes
+  // (each committing separately, so a single auto-consumed flag would only
+  // catch the first one) and false again once the whole thing is done, see
+  // withDirtyTrackingSuppressed below.
+  const suppressDirtyTrackingRef = useRef(false);
+  useEffect(() => {
+    if (!hasMountedDirtyTrackingRef.current) {
+      hasMountedDirtyTrackingRef.current = true;
+      return;
+    }
+    if (suppressDirtyTrackingRef.current) return;
+    setIsDirty(true);
+  }, [rectangles, guides, groups, processorNodes, edges, colorOrder, occurrenceOrder, sampleConfig, currentPdfPath]);
+  // Wraps an async state-restoring operation (see suppressDirtyTrackingRef
+  // above) so every setState batch it makes, however many, is exempted
+  // from marking the project dirty -- always clears the flag afterward
+  // (even on failure) so a thrown error can't leave dirty-tracking
+  // permanently suppressed for the rest of the session.
+  const withDirtyTrackingSuppressed = useCallback(async (fn: () => void | Promise<void>) => {
+    suppressDirtyTrackingRef.current = true;
+    try {
+      await fn();
+    } finally {
+      suppressDirtyTrackingRef.current = false;
+    }
+  }, []);
+  useEffect(() => {
+    window.alteraStudio.reportDirtyState(isDirty);
+  }, [isDirty]);
 
   const buildProjectData = useCallback(() => ({
     version: PROJECT_FILE_VERSION,
@@ -1378,17 +1603,25 @@ const KonvaA4Editor = () => {
     sampleConfig,
   }), [currentPdfPath, rectangles, guides, groups, processorNodes, edges, colorOrder, occurrenceOrder, sampleConfig]);
 
+  // Both return whether the project actually ended up saved -- Save As's
+  // native dialog can be cancelled by the user, which the unsaved-changes
+  // prompt (see handleCloseConfirmSave below) needs to know so it doesn't
+  // go on to close the window as if the save had happened.
   const handleSaveProjectAs = useCallback(async () => {
     const path = await window.alteraStudio.saveProjectAs(JSON.stringify(buildProjectData(), null, 2));
-    if (path) setCurrentProjectPath(path);
+    if (!path) return false;
+    setCurrentProjectPath(path);
+    setIsDirty(false);
+    return true;
   }, [buildProjectData]);
 
   const handleSaveProject = useCallback(async () => {
     if (!currentProjectPath) {
-      await handleSaveProjectAs();
-      return;
+      return handleSaveProjectAs();
     }
     await window.alteraStudio.saveProjectToPath(currentProjectPath, JSON.stringify(buildProjectData(), null, 2));
+    setIsDirty(false);
+    return true;
   }, [currentProjectPath, buildProjectData, handleSaveProjectAs]);
 
   const handleOpenProject = useCallback(async () => {
@@ -1402,40 +1635,69 @@ const KonvaA4Editor = () => {
       return;
     }
 
-    // Re-load the PDF this project references first -- everything else
-    // (rectangles, groups, ...) is drawn relative to it, and the backend
-    // needs its own set-path call before Convert/Schema Preview will work
-    // against it (same call bridge.openFileDialog makes for a fresh open).
-    if (data.pdfPath) {
-      try {
-        await fetch(`${window.alteraStudio.backendUrl}/pdf-converter/set-path`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ path: data.pdfPath }),
-        });
-        await (window as unknown as { loadPdfFromPath: (p: string) => Promise<void> }).loadPdfFromPath(data.pdfPath);
-      } catch {
-        alert(`Couldn't reopen "${data.pdfPath}" -- it may have moved. The rest of the project loaded anyway.`);
+    // Everything from here down replaces project state wholesale rather
+    // than representing a real edit -- suppressed for the whole operation
+    // (it commits in more than one batch: the PDF reload below, awaited,
+    // then the setRectangles/etc. batch after it) so a freshly-opened
+    // project doesn't immediately read back as having unsaved changes.
+    await withDirtyTrackingSuppressed(async () => {
+      // Re-load the PDF this project references first -- everything else
+      // (rectangles, groups, ...) is drawn relative to it, and the backend
+      // needs its own set-path call before Convert/Schema Preview will work
+      // against it (same call bridge.openFileDialog makes for a fresh open).
+      if (data.pdfPath) {
+        try {
+          await fetch(`${window.alteraStudio.backendUrl}/pdf-converter/set-path`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ path: data.pdfPath }),
+          });
+          await (window as unknown as { loadPdfFromPath: (p: string) => Promise<void> }).loadPdfFromPath(data.pdfPath);
+        } catch {
+          alert(`Couldn't reopen "${data.pdfPath}" -- it may have moved. The rest of the project loaded anyway.`);
+        }
       }
-    }
 
-    setRectangles(data.rectangles ?? []);
-    setGuides(data.guides ?? []);
-    setGroups(data.groups ?? []);
-    setProcessorNodes(data.processorNodes ?? []);
-    setEdges(data.edges ?? []);
-    setColorOrder(data.colorOrder ?? []);
-    setOccurrenceOrder(data.occurrenceOrder ?? true);
-    if (data.sampleConfig) setSampleConfig(data.sampleConfig);
-    setWorkflowResetSignal((v) => v + 1);
-    // A freshly-opened project's edit history starts clean -- undoing past
-    // its own load, back into whatever the PREVIOUS project's edits were,
-    // wouldn't make sense.
-    historyRef.current = [];
-    futureRef.current = [];
-    setHistoryVersion((v) => v + 1);
-    setCurrentProjectPath(opened.path);
-  }, [buildProjectData]);
+      setRectangles(data.rectangles ?? []);
+      setGuides(data.guides ?? []);
+      setGroups(data.groups ?? []);
+      setProcessorNodes(data.processorNodes ?? []);
+      setEdges(data.edges ?? []);
+      setColorOrder(data.colorOrder ?? []);
+      setOccurrenceOrder(data.occurrenceOrder ?? true);
+      if (data.sampleConfig) setSampleConfig(data.sampleConfig);
+      setWorkflowResetSignal((v) => v + 1);
+      // A freshly-opened project's edit history starts clean -- undoing
+      // past its own load, back into whatever the PREVIOUS project's edits
+      // were, wouldn't make sense.
+      historyRef.current = [];
+      futureRef.current = [];
+      setHistoryVersion((v) => v + 1);
+      setCurrentProjectPath(opened.path);
+    });
+    setIsDirty(false);
+  }, [buildProjectData, withDirtyTrackingSuppressed]);
+
+  // Unsaved-changes prompt -- the actual dialog is a real native window
+  // (CloseConfirmWindow.tsx, opened by electron/main.ts's
+  // openCloseConfirmWindow when the main window tries to close while
+  // dirty). This side only runs the "Save" choice, since the save logic
+  // itself lives here, not in that tiny window -- reports back whether it
+  // actually happened, since Save As's native dialog can be cancelled, in
+  // which case the confirm window needs to drop back out of "Saving…"
+  // instead of closing as if it had succeeded.
+  useEffect(() => {
+    return window.alteraStudio.onSaveBeforeClose(() => {
+      void (async () => {
+        const saved = await handleSaveProject();
+        if (saved) {
+          window.alteraStudio.confirmSaveBeforeClose();
+        } else {
+          window.alteraStudio.reportSaveBeforeCloseFailed();
+        }
+      })();
+    });
+  }, [handleSaveProject]);
 
   // Prevent browser zoom (Ctrl+scroll) everywhere in the webview
   useEffect(() => {
@@ -1608,6 +1870,14 @@ const KonvaA4Editor = () => {
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
   }, [theme]);
+  // Mirrored to main so the native unsaved-changes prompt (main.ts's
+  // openCloseConfirmWindow) can open already in the right theme -- that
+  // window is created by main itself (not asked for by this renderer the
+  // way Settings/Filter Builder/etc. are), so it has no other way to know
+  // which theme is currently active.
+  useEffect(() => {
+    window.alteraStudio.reportTheme(theme);
+  }, [theme]);
 
   // Chromium's native page zoom, not this window's CSS -- see main.ts's
   // "zoom:set" handler and its own comment for why this is a real
@@ -1617,12 +1887,18 @@ const KonvaA4Editor = () => {
   }, [widgetZoom]);
 
   // Whatever was saved last session, loaded once on launch -- otherwise
-  // every restart silently reverts to hardcoded defaults.
+  // every restart silently reverts to hardcoded defaults. Suppressed from
+  // dirty-tracking: applyPersistedSettings touches sampleConfig (part of
+  // the tracked project data), and without this every fresh launch marked
+  // itself dirty the moment this resolved -- including well within the
+  // splash screen's minimum display time, so closing the app from there
+  // wrongly triggered the unsaved-changes prompt before the user had done
+  // anything at all.
   useEffect(() => {
     window.alteraStudio.loadPersistedSettings().then((saved) => {
-      if (saved) applyPersistedSettings(saved);
+      if (saved) withDirtyTrackingSuppressed(() => applyPersistedSettings(saved));
     });
-  }, [applyPersistedSettings]);
+  }, [applyPersistedSettings, withDirtyTrackingSuppressed]);
 
   // Geometry-only key for rectangles — excludes `name` so renaming a table
   // doesn't re-trigger the schema preview (only geometry/config changes do).
@@ -1703,6 +1979,18 @@ const KonvaA4Editor = () => {
       delete (window as any).initCloseAfterConvert;
     };
   }, []);
+
+  // Mirrors the conversion toast's own progress onto the taskbar/dock icon
+  // (electron/main.ts's win.setProgressBar) -- lets progress stay visible
+  // even while the app is minimized or in the background, same as any
+  // other desktop app's long-running operation.
+  useEffect(() => {
+    if (!showLoader) {
+      window.alteraStudio.setTaskbarProgress(-1);
+      return;
+    }
+    window.alteraStudio.setTaskbarProgress(conversionProgress != null ? conversionProgress / 100 : 2);
+  }, [showLoader, conversionProgress]);
 
   // --------------------------------------------------------------------------------------
   // Add this function in the component
@@ -3705,6 +3993,32 @@ const KonvaA4Editor = () => {
     });
   }, [sampleConfig, closeAfterConvert, schemaSampleRowLimit, schemaPageLimit, autoExpandOutputDrawer, pdfRenderDpi, numPages, theme, widgetZoom]);
 
+  // macOS's native menu (main.ts's buildNativeMenu) has no direct access
+  // to this component's handlers, so it forwards each click's action name
+  // over IPC instead -- dispatched here to the exact same functions the
+  // in-page MenuBar calls directly via props on Windows/Linux.
+  useEffect(() => {
+    if (!isMac) return;
+    return window.alteraStudio.onMenuAction((action) => {
+      switch (action) {
+        case "open-project": handleOpenProject(); break;
+        case "save-project": handleSaveProject(); break;
+        case "save-project-as": handleSaveProjectAs(); break;
+        case "settings": handleOpenSettings(); break;
+        case "restart": window.alteraStudio.restartApp(); break;
+        case "undo": handleUndo(); break;
+        case "redo": handleRedo(); break;
+        case "cut": handleCutSelected(); break;
+        case "copy": handleCopySelected(); break;
+        case "paste": handlePasteSelected(); break;
+        case "delete": handleDeleteSelected(); break;
+      }
+    });
+  }, [
+    isMac, handleOpenProject, handleSaveProject, handleSaveProjectAs, handleOpenSettings,
+    handleUndo, handleRedo, handleCutSelected, handleCopySelected, handlePasteSelected, handleDeleteSelected,
+  ]);
+
   const dockPanelsContextValue = useMemo<DockPanelsContextValue>(() => ({
     disabled: showSchema,
     toolbar: {
@@ -3810,16 +4124,19 @@ const KonvaA4Editor = () => {
       }}
     >
       <div
-        className={`high-level-container${isDragOver ? " drop-active" : ""}`}
+        className={`high-level-container${isDragOver ? " drop-active" : ""}${isMac ? " no-menu-bar" : ""}`}
         onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
         onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setIsDragOver(false); }}
         onDrop={(e) => { e.preventDefault(); setIsDragOver(false); const f = e.dataTransfer.files[0]; if (f) handleFileDrop(f); }}
       >
-        {/* ── Custom menu bar, replacing Electron's native File/Edit/View/
-            Window/Help menu (see main.ts's Menu.setApplicationMenu(null)).
-            Fixed at the very top; .dock-overlay-root's `top: 28px` reserves
-            the space below it, same pattern the footer's `bottom: 40px`
-            already uses. ── */}
+        {/* ── Custom menu bar, replacing Electron's native File/Edit/Help
+            menu on Windows/Linux (see main.ts's buildNativeMenu -- macOS
+            gets a real native menu instead, and isMac skips this entirely
+            there to avoid showing both). Fixed at the very top;
+            .dock-overlay-root's `top: 28px` reserves the space below it
+            (zeroed via .no-menu-bar when this isn't rendered), same
+            pattern the footer's `bottom: 40px` already uses. ── */}
+        {!isMac && (
         <MenuBar
           onOpenProject={handleOpenProject}
           onSaveProject={handleSaveProject}
@@ -3840,6 +4157,21 @@ const KonvaA4Editor = () => {
           hasClipboard={clipboardRef.current.length > 0}
           onRunAll={handleRunAllProcessorNodes}
         />
+        )}
+
+        {/* ── Workspace/Layout switcher (Photoshop-style workspace picker) --
+            docked into the in-page MenuBar's own strip on Windows/Linux
+            (positioned to its right, see .layout-switcher-bar), floating on
+            its own on macOS since there's no in-page bar there to sit in. ── */}
+        {!isMac ? (
+          <div className="layout-switcher-bar">
+            <LayoutSwitcher value={dockLayoutPreset} onChange={handleSelectDockLayoutPreset} />
+          </div>
+        ) : (
+          <div className="layout-switcher-floating">
+            <LayoutSwitcher value={dockLayoutPreset} onChange={handleSelectDockLayoutPreset} />
+          </div>
+        )}
 
         {/* ── Footer: page navigation (left) + zoom controls (right), fixed & compact ── */}
         <div className={`app-footer${showSchema ? " disabled" : ""}`}>
@@ -4435,10 +4767,7 @@ const KonvaA4Editor = () => {
               ref={dockLayoutRef}
               defaultLayout={initialDockLayout}
               onLayoutChange={handleDockLayoutChange}
-              groups={{
-                toolbar: { floatable: false, maximizable: false },
-                fixed: { floatable: false, maximizable: false },
-              }}
+              groups={DOCK_GROUPS}
               style={{ position: "absolute", inset: 0, pointerEvents: "none", background: "transparent" }}
             />
           </div>

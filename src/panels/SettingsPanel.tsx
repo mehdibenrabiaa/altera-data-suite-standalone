@@ -25,7 +25,7 @@ export function CanvasToggles({
         <span className={`groove-toggle-label ${sampleEnabled ? "active" : ""}`}>SM</span>
         <GrooveSwitch checked={sampleEnabled} onChange={onToggleSample} />
       </div>
-      <Divider type="vertical" style={{ width: "1px", height: "20px", backgroundColor: "#cccccc", margin: "0 4px" }} />
+      <Divider type="vertical" style={{ width: "1px", height: "20px", backgroundColor: "var(--border-color)", margin: "0 4px" }} />
       <div className="groove-toggle-group" title="Toggle table name labels (T)">
         <span className={`groove-toggle-label ${showLabels ? "active" : ""}`}>TAG</span>
         <GrooveSwitch checked={showLabels} onChange={onToggleShowLabels} />

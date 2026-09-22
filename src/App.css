@@ -68,27 +68,30 @@
    form control chrome Chromium itself paints) to switch too. */
 :root {
   color-scheme: light;
-  /* Muted, Illustrator/Photoshop-style chrome instead of a flat white
-     expanse -- bg-panel/bg-subtle/bg-hover used to sit only 15 shades
-     apart (255/245/240), so every surface blended into the next with
-     almost no depth cue. Widened so panels actually read as distinct
-     layers, same relative ordering (panel lightest, hover darkest). */
-  --bg-panel: #f5f5f5;
-  --bg-hover: #d8d8d8;
-  --bg-subtle: #e4e4e4;
-  --border-color: #cccccc;
-  --border-color-strong: #a0a0a0;
-  --text-primary: #1a1a1a;
-  --text-secondary: #545454;
-  --text-muted: #868686;
+  /* Cool slate chrome instead of the old flat neutral grays -- a faint
+     blue undertone (hue ~220) reads calmer/more "designed" than pure
+     gray while keeping the same panel-lightest/hover-darkest layering
+     the rest of the app's CSS relies on. */
+  --bg-panel: #f6f7f9;
+  --bg-hover: #dadde3;
+  --bg-subtle: #e9ebef;
+  --border-color: #d2d6dd;
+  --border-color-strong: #a6acb8;
+  --text-primary: #1b1f27;
+  --text-secondary: #4b5563;
+  --text-muted: #8992a1;
 }
 [data-theme="dark"] {
   color-scheme: dark;
-  --bg-panel: #2b2b2b;
-  --bg-hover: #3a3a3a;
-  --bg-subtle: #333333;
-  --border-color: #454545;
-  --border-color-strong: #5a5a5a;
+  /* VS Code Dark+ palette -- same 5-step surface/border ladder as before
+     (panel darkest, hover lightest of the 3 backgrounds; border-color
+     darker than border-color-strong), just remapped onto VS Code's own
+     tones so this reads as that familiar editor chrome. */
+  --bg-panel: #1e1e1e;
+  --bg-subtle: #252526;
+  --bg-hover: #2a2d2e;
+  --border-color: #404040;
+  --border-color-strong: #515151;
   --text-primary: #e8e8e8;
   --text-secondary: #b0b0b0;
   --text-muted: #8a8a8a;
@@ -170,8 +173,8 @@
 [data-theme="dark"] .react-flow {
   --xy-background-color: var(--bg-hover);
   /* xyflow's own dark edge-stroke default (#3e3e3e) sits almost on top of
-     the background color just above (#3a3a3a) -- barely a 1.05:1 contrast
-     ratio, so every connection line all but disappeared. */
+     the background color just above (var(--bg-hover)), so every
+     connection line all but disappeared. */
   --xy-edge-stroke: var(--text-secondary);
   --xy-edge-stroke-selected: var(--text-primary);
   --xy-connectionline-stroke: var(--text-secondary);
@@ -1898,8 +1901,8 @@ button:focus-visible {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background: #f7f7f7;
-  color: #1a1a1a;
+  background: var(--bg-subtle);
+  color: var(--text-primary);
 }
 .group-by-layout {
   flex: 1;
@@ -1913,8 +1916,8 @@ button:focus-visible {
 .group-by-source-panel,
 .group-by-config-panel {
   min-height: 0;
-  border: 1px solid #dedede;
-  background: #fff;
+  border: 1px solid var(--border-color);
+  background: var(--bg-panel);
   display: flex;
   flex-direction: column;
 }
@@ -1923,19 +1926,21 @@ button:focus-visible {
 .group-by-panel-heading {
   font-size: 13px;
   font-weight: 600;
-  color: #303030;
+  color: var(--text-primary);
   margin-bottom: 8px;
 }
-.group-by-panel-heading span { font-weight: 400; color: #777; }
+.group-by-panel-heading span { font-weight: 400; color: var(--text-secondary); }
 .group-by-filter {
   width: 100%;
   height: 32px;
   box-sizing: border-box;
   padding: 0 9px;
-  border: 1px solid #cfcfcf;
+  border: 1px solid var(--border-color);
   border-radius: 2px;
   font: inherit;
   outline: none;
+  background: var(--bg-panel);
+  color: var(--text-primary);
 }
 .group-by-filter:focus { border-color: #FE4D41; }
 .group-by-column-list {
@@ -1943,7 +1948,7 @@ button:focus-visible {
   min-height: 100px;
   overflow-y: auto;
   margin-top: 8px;
-  border: 1px solid #e1e1e1;
+  border: 1px solid var(--border-color);
 }
 .group-by-source-row {
   display: flex;
@@ -1953,15 +1958,15 @@ button:focus-visible {
   min-height: 34px;
   padding: 0 8px;
   border: 0;
-  border-bottom: 1px solid #f0f0f0;
-  background: #fff;
-  color: #292929;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-panel);
+  color: var(--text-primary);
   text-align: left;
   font: inherit;
   cursor: pointer;
 }
-.group-by-source-row:hover { background: #f8f8f8; }
-.group-by-source-row.selected { background: #fdf0ef; color: #b4372c; }
+.group-by-source-row:hover { background: var(--bg-hover); }
+.group-by-source-row.selected { background: rgba(254, 77, 65, 0.12); color: var(--primary-color); }
 .group-by-column-mark {
   display: inline-flex;
   align-items: center;
@@ -1977,19 +1982,19 @@ button:focus-visible {
 .group-by-column-mark.grouping { background: #FE4D41; }
 .group-by-source-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
 .group-by-source-actions .btn { justify-content: center; height: 32px; padding: 0 8px; font-size: 12px; }
-.group-by-grouping { padding: 13px 14px; border-bottom: 1px solid #dedede; background: #fafafa; }
+.group-by-grouping { padding: 13px 14px; border-bottom: 1px solid var(--border-color); background: var(--bg-hover); }
 .group-by-grouping-values { display: flex; flex-wrap: wrap; gap: 6px; min-height: 27px; align-items: center; }
-.group-by-empty-inline { font-size: 12px; color: #888; }
+.group-by-empty-inline { font-size: 12px; color: var(--text-muted); }
 .group-by-chip {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   height: 26px;
   padding: 0 8px;
-  border: 1px solid #edb7b2;
+  border: 1px solid rgba(254, 77, 65, 0.35);
   border-radius: 3px;
-  background: #fff1f0;
-  color: #a83b32;
+  background: rgba(254, 77, 65, 0.12);
+  color: var(--primary-color);
   font: inherit;
   font-size: 12px;
   cursor: pointer;
@@ -1998,16 +2003,16 @@ button:focus-visible {
 .group-by-table-wrap { padding: 35px 14px 14px; }
 .group-by-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 13px; }
 .group-by-table th,
-.group-by-table td { height: 34px; padding: 0 10px; border: 1px solid #dedede; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
-.group-by-table th { background: #f1f1f1; color: #555; font-weight: 600; }
+.group-by-table td { height: 34px; padding: 0 10px; border: 1px solid var(--border-color); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+.group-by-table th { background: var(--bg-hover); color: var(--text-secondary); font-weight: 600; }
 .group-by-table tbody tr { cursor: pointer; }
-.group-by-table tbody tr:hover { background: #fafafa; }
-.group-by-table tbody tr.selected { background: #fdf0ef; }
-.group-by-table-empty { height: 88px !important; color: #888; text-align: center !important; }
-.group-by-no-aggregation { color: #999; }
-.group-by-aggregations { margin: auto 14px 14px; padding: 13px 14px; border: 1px solid #dedede; background: #fafafa; }
+.group-by-table tbody tr:hover { background: var(--bg-hover); }
+.group-by-table tbody tr.selected { background: rgba(254, 77, 65, 0.12); }
+.group-by-table-empty { height: 88px !important; color: var(--text-muted); text-align: center !important; }
+.group-by-no-aggregation { color: var(--text-muted); }
+.group-by-aggregations { margin: auto 14px 14px; padding: 13px 14px; border: 1px solid var(--border-color); background: var(--bg-hover); }
 .group-by-aggregation-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px 14px; }
-.group-by-aggregation-option { min-height: 23px; font-size: 12px; color: #333; }
+.group-by-aggregation-option { min-height: 23px; font-size: 12px; color: var(--text-primary); }
 .group-by-nth-control { margin-top: 12px; }
 .group-by-nth-control .ant-input-number { width: 64px; }
 
@@ -2016,7 +2021,7 @@ button:focus-visible {
    sidebar rhythm and Unique/Cleaner's simple section/list surfaces. */
 .group-by-window {
   box-sizing: border-box;
-  background: #f5f5f5;
+  background: var(--bg-subtle);
   font-family: "Google Sans Flex", sans-serif;
   font-size: 13px;
 }
@@ -2028,31 +2033,31 @@ button:focus-visible {
 .group-by-source-panel {
   padding: 14px;
   border: 0;
-  border-right: 1px solid #e0e0e0;
-  background: #f0f0f0;
+  border-right: 1px solid var(--border-color);
+  background: var(--bg-hover);
 }
 .group-by-config-panel {
   border: 0;
-  background: #f5f5f5;
+  background: var(--bg-subtle);
 }
 .group-by-panel-heading {
   margin-bottom: 7px;
   font-size: 12px;
   font-weight: 600;
-  color: #555;
+  color: var(--text-secondary);
 }
 .group-by-filter {
   height: 28px;
-  border-color: #e0e0e0;
+  border-color: var(--border-color);
   border-radius: 0;
-  background: #fff;
+  background: var(--bg-panel);
   font-size: 12px;
 }
 .group-by-filter:focus { border-color: #FE4D41; }
 .group-by-column-list {
   margin-top: 7px;
-  border-color: #e0e0e0;
-  background: #fff;
+  border-color: var(--border-color);
+  background: var(--bg-panel);
 }
 .group-by-source-row {
   min-height: 29px;
@@ -2060,8 +2065,8 @@ button:focus-visible {
   border-bottom-color: transparent;
   font-size: 12px;
 }
-.group-by-source-row:hover { background: #f0f0f0; }
-.group-by-source-row.selected { background: #fff3f2; color: #FE4D41; }
+.group-by-source-row:hover { background: var(--bg-hover); }
+.group-by-source-row.selected { background: rgba(254, 77, 65, 0.12); color: var(--primary-color); }
 .group-by-column-mark {
   width: 17px;
   height: 17px;
@@ -2082,16 +2087,16 @@ button:focus-visible {
   width: 100%;
   height: 28px;
   padding: 0 8px;
-  border: 1px solid #c8c8c8;
+  border: 1px solid var(--border-color-strong);
   border-radius: 2px;
-  background: #fff;
-  color: #333;
+  background: var(--bg-panel);
+  color: var(--text-primary);
   font-family: inherit;
   font-size: 11px;
   cursor: pointer;
 }
-.group-by-action:hover:not(:disabled) { border-color: #999; background: #fafafa; }
-.group-by-action:disabled { color: #aaa; cursor: not-allowed; }
+.group-by-action:hover:not(:disabled) { border-color: var(--border-color-strong); background: var(--bg-hover); }
+.group-by-action:disabled { color: var(--text-muted); cursor: not-allowed; }
 .group-by-add-metric {
   border-color: #FE4D41;
   background: #FE4D41;
@@ -2106,19 +2111,19 @@ button:focus-visible {
 .group-by-grouping-values { min-height: 25px; }
 .group-by-chip {
   height: 24px;
-  border-color: #f5c0bc;
+  border-color: rgba(254, 77, 65, 0.35);
   border-radius: 2px;
-  background: #fff3f2;
-  color: #FE4D41;
+  background: rgba(254, 77, 65, 0.12);
+  color: var(--primary-color);
   font-size: 11px;
 }
 .group-by-table-wrap { padding: 35px 14px 14px; }
-.group-by-table { background: #fff; font-size: 12px; }
+.group-by-table { background: var(--bg-panel); font-size: 12px; }
 .group-by-table th,
-.group-by-table td { height: 30px; border-color: #e0e0e0; }
-.group-by-table th { background: #f0f0f0; color: #555; }
-.group-by-table tbody tr:hover { background: #f0f0f0; }
-.group-by-table tbody tr.selected { background: #fff; }
+.group-by-table td { height: 30px; border-color: var(--border-color); }
+.group-by-table th { background: var(--bg-hover); color: var(--text-secondary); }
+.group-by-table tbody tr:hover { background: var(--bg-hover); }
+.group-by-table tbody tr.selected { background: var(--bg-panel); }
 .group-by-table tbody tr.selected td:first-child { border-left: 3px solid #FE4D41; padding-left: 8px; }
 .group-by-table tbody tr.selected td:first-child { font-weight: 600; }
 .group-by-aggregations {
@@ -2129,8 +2134,8 @@ button:focus-visible {
 }
 .group-by-aggregation-grid {
   padding: 9px 10px;
-  border: 1px solid #e0e0e0;
-  background: #fff;
+  border: 1px solid var(--border-color);
+  background: var(--bg-panel);
 }
 .group-by-aggregation-option { min-height: 21px; font-size: 12px; }
 .group-by-nth-control { margin: 8px 10px 0; }
@@ -3252,6 +3257,11 @@ button:focus-visible {
   z-index: 50;
   pointer-events: none;
   background: transparent;
+}
+/* macOS: no in-page MenuBar (see App.tsx's isMac check -- it gets a real
+   native menu instead), so there's no 28px bar to reserve room for. */
+.high-level-container.no-menu-bar .dock-overlay-root {
+  top: 0;
 }
 
 /* Toolbar/Layers/Properties/Smart Rectangles panels, greyed-out and
@@ -4754,6 +4764,58 @@ body.dock-dragging .dock-style-canvas-dock-panel {
   cursor: default;
 }
 
+/* ── Layout/Workspace switcher (Photoshop-style workspace picker) ──
+   .layout-switcher-bar docks it into the right end of the in-page
+   MenuBar's own 28px strip (Windows/Linux); .layout-switcher-floating is
+   the standalone pill used on macOS instead, where there's no in-page bar
+   for it to sit in (see App.tsx's isMac). Both just position one
+   .layout-switcher differently -- the switcher itself doesn't care which. */
+.layout-switcher-bar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 28px;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  background: var(--bg-subtle);
+  border-bottom: 1px solid var(--border-color-strong);
+  border-left: 1px solid var(--border-color);
+}
+.layout-switcher-floating {
+  position: fixed;
+  top: 8px;
+  right: 12px;
+  z-index: 1000;
+}
+.layout-switcher {
+  position: relative;
+}
+.layout-switcher-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  margin: 0 6px;
+  padding: 0 9px;
+  border: none;
+  border-radius: 0;
+  background: var(--bg-panel);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.layout-switcher-btn:hover {
+  background: var(--bg-hover);
+}
+.layout-switcher-dropdown {
+  left: auto;
+  right: 0;
+  min-width: 160px;
+}
+
 .pop-up-toolbar {
   font-family: inherit;
   position: absolute;
@@ -5552,7 +5614,7 @@ body.dock-dragging .dock-style-canvas-dock-panel {
 
 .drop-zone-modal {
   pointer-events: auto;
-  background: var(--bg-panel);
+  background: var(--bg-subtle);
   border: 1px solid var(--border-color-strong);
   border-radius: 3px;
   width: 420px;
@@ -5564,7 +5626,7 @@ body.dock-dragging .dock-style-canvas-dock-panel {
   display: flex;
   flex-direction: column;
   align-items: center;
-  background: var(--bg-subtle);
+  background: var(--bg-panel);
   border: none;
   border-radius: 2px;
   padding: 32px 20px;
@@ -5574,7 +5636,7 @@ body.dock-dragging .dock-style-canvas-dock-panel {
 
 .drop-zone-card:hover {
   border-color: var(--text-primary);
-  background: var(--bg-hover);
+  background: var(--bg-subtle);
 }
 
 .drop-zone-card.drag-over {
@@ -5629,4 +5691,41 @@ body.dock-dragging .dock-style-canvas-dock-panel {
   justify-content: space-between;
   /* keep header height stable so panel doesn't jump */
   min-height: 22px;
+}
+
+/* ── Unsaved-changes prompt (CloseConfirmWindow.tsx) -- a real native
+   window (see main.ts's openCloseConfirmWindow), styled like every other
+   Configure window's own footer (.filter-builder-btn-primary/-secondary)
+   instead of a plain OS message box. ── */
+.close-confirm-window {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  box-sizing: border-box;
+  background: var(--bg-panel);
+  font-family: "Google Sans Flex", sans-serif;
+  padding: 20px;
+}
+.close-confirm-window h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.close-confirm-window p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  flex: 1;
+}
+.close-confirm-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.close-confirm-actions-right {
+  display: flex;
+  gap: 8px;
 }

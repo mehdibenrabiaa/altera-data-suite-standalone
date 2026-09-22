@@ -1,7 +1,24 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, MenuItemConstructorOptions, shell } from "electron";
 import { spawn, ChildProcess } from "node:child_process";
 import path from "node:path";
 import fs from "node:fs/promises";
+import { readFileSync, writeFileSync } from "node:fs";
+
+// Only one copy of this app should ever run at once -- a second launch
+// would spawn its own backend process fighting the first one for the same
+// hardcoded BACKEND_PORT below. If another instance already holds the
+// lock, this one has nothing useful to do: hand off to it (see
+// second-instance below) and exit immediately, before any of the
+// backend/window/IPC setup further down even runs.
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+  process.exit(0);
+}
+
+// Windows uses this to group this app's windows under one taskbar icon/
+// identity (jump lists, notifications, etc.) instead of falling back to
+// Electron's own default id, which reads as "electron.app" everywhere.
+app.setAppUserModelId("com.alteradatasuite.studio");
 
 const BACKEND_PORT = 8756;
 // dist-electron/main.js -> ../public/favicon.ico. Works in dev as-is (public/
@@ -11,8 +28,39 @@ const BACKEND_PORT = 8756;
 const APP_ICON = path.join(__dirname, "../public/favicon.ico");
 let backendProc: ChildProcess | null = null;
 let win: BrowserWindow | null = null;
+let splashWin: BrowserWindow | null = null;
 let settingsWin: BrowserWindow | null = null;
+let closeConfirmWin: BrowserWindow | null = null;
 let isQuitting = false;
+// Mirrored from App.tsx (see "app:theme-state" below) -- lets
+// openCloseConfirmWindow open already in the right theme, since that
+// window is created by main itself, not asked for by the renderer the
+// way Settings/Filter Builder/etc. are.
+let currentTheme: "light" | "dark" = "light";
+
+// A second launch (see requestSingleInstanceLock above) still starts an
+// Electron process briefly before hitting its own lock check and exiting
+// -- this only fires in the FIRST (already-running) instance, telling it
+// someone tried to open the app again. Surfacing the existing window
+// (rather than silently doing nothing) is what every other single-
+// instance desktop app does.
+app.on("second-instance", () => {
+  if (!win) return;
+  if (win.isMinimized()) win.restore();
+  win.focus();
+});
+
+// ── Unsaved-changes guard ───────────────────────────────────────────────
+// App.tsx mirrors its own dirty flag here on every change (see
+// "app:dirty-state" below) so the close handlers can check it
+// synchronously instead of needing an async round-trip at close time.
+let isDirty = false;
+// Set right before deliberately re-closing the window after the user has
+// already confirmed (via App.tsx's own themed prompt) that closing is
+// fine -- lets the "close" handler tell "the user just said yes" apart
+// from "a normal close with nothing unsaved", both of which should let it
+// through.
+let allowMainWindowClose = false;
 
 // Every secondary window below (Settings, Filter Builder, Browse) sets
 // `modal: true` + `parent: win`, Electron's own declarative flag for
@@ -44,7 +92,16 @@ function setUpSecondaryModal(secondaryWin: BrowserWindow) {
 }
 
 function startBackend() {
-  const cwd = path.join(__dirname, "../backend");
+  // Dev/unpackaged: __dirname is dist-electron/ at the project root, so
+  // ../backend is the real backend/ folder. Packaged: dist-electron/ lives
+  // inside resources/app.asar, which the backend (a raw Python venv, not
+  // something that can be crammed into an asar) was never part of --
+  // electron-builder's own extraResources instead copies it to
+  // resources/backend, a sibling of app.asar, which is what
+  // process.resourcesPath always points at.
+  const cwd = app.isPackaged
+    ? path.join(process.resourcesPath, "backend")
+    : path.join(__dirname, "../backend");
   const venvPython = path.join(
     cwd,
     ".venv",
@@ -55,6 +112,62 @@ function startBackend() {
     ["-m", "uvicorn", "app.main:app", "--port", String(BACKEND_PORT)],
     { cwd, stdio: "inherit" },
   );
+  // stdio: "inherit" sends the backend's own errors to this process's
+  // console -- invisible in a packaged build, which has none. Without
+  // this, a backend that fails to start (missing venv, port already in
+  // use, ...) left the app just silently non-functional: every PDF/data
+  // operation would hang or fail with no indication why.
+  backendProc.on("error", (err) => {
+    dialog.showErrorBox(
+      "Backend failed to start",
+      `Altera Data Suite's backend process could not be launched.\n\n${err.message}`,
+    );
+  });
+  backendProc.on("exit", (code, signal) => {
+    // isQuitting means this is the app's own normal shutdown killing it
+    // (see before-quit below) -- not a crash.
+    if (isQuitting) return;
+    dialog.showErrorBox(
+      "Backend stopped unexpectedly",
+      `The backend process exited unexpectedly (code ${code ?? signal}). PDF conversion and other data operations won't work until the app is restarted.`,
+    );
+  });
+}
+
+// ── Main window size/position persistence ───────────────────────────────
+// A plain JSON file in the OS's per-app data directory, same place/
+// reasoning as settings.json elsewhere in this file -- every other
+// desktop app remembers where you left its window, rather than always
+// reopening at a fixed 1440x900.
+const WINDOW_STATE_FILE = path.join(app.getPath("userData"), "window-state.json");
+interface WindowState { width: number; height: number; x?: number; y?: number; isMaximized: boolean }
+const DEFAULT_WINDOW_STATE: WindowState = { width: 1440, height: 900, isMaximized: false };
+
+function loadWindowState(): WindowState {
+  try {
+    const raw = JSON.parse(readFileSync(WINDOW_STATE_FILE, "utf-8"));
+    if (typeof raw.width === "number" && typeof raw.height === "number") {
+      return { ...DEFAULT_WINDOW_STATE, ...raw };
+    }
+  } catch {
+    // First launch, or a corrupt/missing file -- fall back to defaults.
+  }
+  return DEFAULT_WINDOW_STATE;
+}
+
+function saveWindowState(target: BrowserWindow) {
+  const isMaximized = target.isMaximized();
+  // getBounds() while maximized reports the maximized size itself, which
+  // would make the NEXT launch open pre-sized to fill the screen even if
+  // later un-maximized -- getNormalBounds() keeps the pre-maximize size
+  // so restoring works the way it would if the user un-maximized by hand.
+  const bounds = isMaximized ? target.getNormalBounds() : target.getBounds();
+  try {
+    writeFileSync(WINDOW_STATE_FILE, JSON.stringify({ ...bounds, isMaximized }));
+  } catch {
+    // Best-effort -- losing the remembered size/position isn't worth
+    // surfacing an error over.
+  }
 }
 
 // Loads one of the app's HTML entry points into `target` -- index.html
@@ -80,14 +193,131 @@ function loadAppInto(target: BrowserWindow, htmlFile = "index.html", query?: Rec
   }
 }
 
-function createWindow() {
-  win = new BrowserWindow({
-    width: 1440,
-    height: 900,
+// Frameless, chromeless splash shown the instant the app launches --
+// index.html itself takes a beat to load (esp. the first paint of the
+// full PDF/canvas UI), and without this the app looked like it hadn't
+// started at all for that window. A fully static page (see
+// public/splash.html) rather than a React entry -- nothing on it needs
+// state or IPC, so it doesn't need Vite's multi-page build/bundling at
+// all, just plain loadAppInto like every other window here.
+const SPLASH_MIN_VISIBLE_MS = 5000;
+let splashShownAt = 0;
+
+function createSplashWindow() {
+  splashWin = new BrowserWindow({
+    width: 440,
+    height: 300,
+    frame: false,
+    resizable: false,
+    movable: true,
+    alwaysOnTop: true,
+    show: false,
     icon: APP_ICON,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
     },
+  });
+  splashWin.once("ready-to-show", () => {
+    splashShownAt = Date.now();
+    splashWin?.show();
+  });
+  splashWin.on("closed", () => {
+    splashWin = null;
+  });
+  loadAppInto(splashWin, "splash.html");
+}
+
+// Closes the splash and reveals the main window, but never before the
+// splash has been on screen for SPLASH_MIN_VISIBLE_MS -- on a fast
+// machine index.html can be ready in well under a second, which made the
+// splash flash by too quickly to actually read.
+function finishSplash() {
+  const elapsed = Date.now() - splashShownAt;
+  const remaining = Math.max(0, SPLASH_MIN_VISIBLE_MS - elapsed);
+  setTimeout(() => {
+    win?.show();
+    if (splashWin && !splashWin.isDestroyed()) splashWin.close();
+  }, remaining);
+}
+
+// Unsaved-changes prompt -- a real native window (CloseConfirmWindow.tsx),
+// styled like every other Configure window instead of a plain OS message
+// box, per the same modal/setUpSecondaryModal pattern Settings uses below.
+// Opened directly by the "close" handler (not asked for by the renderer
+// the way every other secondary window here is), so it also has to pass
+// its own theme along explicitly (see currentTheme above) rather than
+// pulling it from an "open" payload.
+function openCloseConfirmWindow() {
+  if (closeConfirmWin && !closeConfirmWin.isDestroyed()) {
+    closeConfirmWin.focus();
+    return;
+  }
+  closeConfirmWin = new BrowserWindow({
+    width: 420,
+    height: 170,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    autoHideMenuBar: true,
+    parent: win ?? undefined,
+    modal: true,
+    title: "Altera Data Suite",
+    icon: APP_ICON,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+    },
+  });
+  closeConfirmWin.once("ready-to-show", () => closeConfirmWin?.show());
+  setUpSecondaryModal(closeConfirmWin);
+  closeConfirmWin.on("closed", () => {
+    closeConfirmWin = null;
+  });
+  loadAppInto(closeConfirmWin, "close-confirm.html", { theme: currentTheme });
+}
+
+function createWindow() {
+  const windowState = loadWindowState();
+  win = new BrowserWindow({
+    width: windowState.width,
+    height: windowState.height,
+    x: windowState.x,
+    y: windowState.y,
+    icon: APP_ICON,
+    // Stays hidden until index.html has actually painted its first frame
+    // (see ready-to-show below) -- so the splash window above is the only
+    // thing visible during that gap, instead of a blank white rectangle
+    // appearing behind/before it.
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+    },
+  });
+  if (windowState.isMaximized) win.maximize();
+
+  // Debounced (resize/move fire continuously while dragging) -- only the
+  // settled size/position actually needs to hit disk.
+  let saveWindowStateTimeout: ReturnType<typeof setTimeout> | null = null;
+  const scheduleSaveWindowState = () => {
+    if (saveWindowStateTimeout) clearTimeout(saveWindowStateTimeout);
+    saveWindowStateTimeout = setTimeout(() => { if (win) saveWindowState(win); }, 500);
+  };
+  win.on("resize", scheduleSaveWindowState);
+  win.on("move", scheduleSaveWindowState);
+
+  // Unsaved-changes guard -- App.tsx mirrors its dirty flag to `isDirty`
+  // above on every change (see "app:dirty-state" below). Without this,
+  // closing the window (the X button, File > Exit's window.close(), or
+  // Cmd+Q/native Quit by way of the before-quit handler further down) just
+  // silently discarded any unsaved project edits, which no other desktop
+  // app does. The actual Save/Don't Save/Cancel prompt is a real native
+  // window (openCloseConfirmWindow above), styled like the rest of this
+  // app rather than a plain OS message box.
+  win.on("close", (event) => {
+    if (win) saveWindowState(win);
+    if (allowMainWindowClose || !isDirty) return;
+    event.preventDefault();
+    openCloseConfirmWindow();
   });
 
   // The settings window now hides instead of closing (see settings:open),
@@ -99,11 +329,55 @@ function createWindow() {
     app.quit();
   });
 
+  win.once("ready-to-show", finishSplash);
+
   loadAppInto(win, "index.html");
   if (process.env.VITE_DEV_SERVER_URL) {
     win.webContents.openDevTools();
   }
 }
+
+ipcMain.on("app:dirty-state", (_event, dirty: boolean) => {
+  isDirty = dirty;
+});
+
+ipcMain.on("app:theme-state", (_event, theme: "light" | "dark") => {
+  currentTheme = theme;
+});
+
+// CloseConfirmWindow.tsx's own Save/Don't Save/Cancel buttons all funnel
+// through this one channel.
+ipcMain.on("closeConfirm:choice", (_event, choice: "save" | "discard" | "cancel") => {
+  if (choice === "cancel") {
+    closeConfirmWin?.close();
+    return;
+  }
+  if (choice === "discard") {
+    closeConfirmWin?.close();
+    allowMainWindowClose = true;
+    win?.close();
+    return;
+  }
+  // "save" -- handed to App.tsx (it owns the actual save logic, including
+  // the Save-As dialog for a never-saved project); the confirm window
+  // stays open showing "Saving…" until one of the two handlers below
+  // tells it what happened.
+  win?.webContents.send("app:save-before-close");
+});
+
+ipcMain.on("app:save-before-close-done", () => {
+  closeConfirmWin?.close();
+  allowMainWindowClose = true;
+  win?.close();
+});
+
+ipcMain.on("app:save-before-close-failed", () => {
+  closeConfirmWin?.webContents.send("closeConfirm:save-failed");
+});
+
+ipcMain.on("app:set-taskbar-progress", (_event, value: number) => {
+  win?.setProgressBar(value);
+});
 
 ipcMain.handle("dialog:openPdf", async () => {
   if (!win) return null;
@@ -716,10 +990,75 @@ ipcMain.on("node:deleted", (_event, nodeId: string) => {
   aggregateManager.closeForNode(nodeId);
 });
 
-// Native File/Edit/View/Window/Help menu replaced by an in-page menu bar
-// (see src/components/MenuBar.tsx) -- null removes it entirely, including
-// the Alt-key mnemonic access that would otherwise still reveal it.
-Menu.setApplicationMenu(null);
+// Windows/Linux: keep the in-page menu bar (src/panels/MenuBar.tsx) --
+// null removes the native one entirely, including the Alt-key mnemonic
+// access that would otherwise still reveal it. macOS: users expect a real
+// menu bar at the top of the screen (and Cmd+Q/Cmd+H/etc. to just work),
+// so it gets a native one instead -- App.tsx skips rendering its own
+// in-page MenuBar there (see its isMac check) to avoid showing both.
+// Each item forwards its action to the renderer over IPC rather than
+// duplicating App.tsx's actual handler logic here.
+function sendMenuAction(action: string) {
+  win?.webContents.send("menu:action", action);
+}
+
+function buildNativeMenu(): Menu {
+  const template: MenuItemConstructorOptions[] = [
+    {
+      label: app.name,
+      submenu: [
+        { role: "about" },
+        { type: "separator" },
+        { label: "Settings…", accelerator: "Cmd+,", click: () => sendMenuAction("settings") },
+        { type: "separator" },
+        { role: "services" },
+        { type: "separator" },
+        { role: "hide" },
+        { role: "hideOthers" },
+        { role: "unhide" },
+        { type: "separator" },
+        { role: "quit" },
+      ],
+    },
+    {
+      label: "File",
+      submenu: [
+        { label: "Open Project…", click: () => sendMenuAction("open-project") },
+        { label: "Save", accelerator: "Cmd+S", click: () => sendMenuAction("save-project") },
+        { label: "Save As…", accelerator: "Cmd+Shift+S", click: () => sendMenuAction("save-project-as") },
+        { type: "separator" },
+        { label: "Restart", click: () => sendMenuAction("restart") },
+      ],
+    },
+    {
+      label: "Edit",
+      submenu: [
+        { label: "Undo", accelerator: "Cmd+Z", click: () => sendMenuAction("undo") },
+        { label: "Redo", accelerator: "Cmd+Y", click: () => sendMenuAction("redo") },
+        { type: "separator" },
+        { label: "Cut", accelerator: "Cmd+X", click: () => sendMenuAction("cut") },
+        { label: "Copy", accelerator: "Cmd+C", click: () => sendMenuAction("copy") },
+        { label: "Paste", accelerator: "Cmd+V", click: () => sendMenuAction("paste") },
+        { type: "separator" },
+        { label: "Delete", accelerator: "Backspace", click: () => sendMenuAction("delete") },
+      ],
+    },
+    {
+      label: "Help",
+      submenu: [
+        { label: "About Altera Data Suite", click: () => shell.openExternal("https://alteradatasuite.com/about") },
+        { label: "Documentation", click: () => shell.openExternal("https://alteradatasuite.com/docs") },
+      ],
+    },
+  ];
+  return Menu.buildFromTemplate(template);
+}
+
+if (process.platform === "darwin") {
+  Menu.setApplicationMenu(buildNativeMenu());
+} else {
+  Menu.setApplicationMenu(null);
+}
 
 // ── Project save/open -- the custom menu bar's File > Save/Save As/Open.
 // A project file is just the JSON blob App.tsx already builds (PDF path +
@@ -767,6 +1106,13 @@ ipcMain.on("app:restart", () => {
   app.exit();
 });
 
+// Splash window's own close button -- quits the whole app, same as
+// closing the main window (see win's "closed" handler above), not just
+// the splash itself.
+ipcMain.on("app:quit", () => {
+  app.quit();
+});
+
 // Help menu's About/Docs links -- opens in the user's default browser
 // rather than navigating this window. Restricted to http(s)/mailto so a
 // compromised renderer can't use this to launch an arbitrary local
@@ -776,6 +1122,7 @@ ipcMain.on("shell:openExternal", (_event, url: string) => {
 });
 
 app.whenReady().then(() => {
+  createSplashWindow();
   startBackend();
   createWindow();
 
@@ -789,7 +1136,21 @@ app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
 });
 
-app.on("before-quit", () => {
+app.on("before-quit", (event) => {
+  // before-quit fires before ANY window's own "close" event -- for a quit
+  // that goes through app.quit() (Cmd+Q, the native macOS Quit menu item,
+  // etc., as opposed to File > Exit's plain window.close()), this would
+  // otherwise kill the backend out from under an unsaved-changes prompt
+  // the user hasn't answered yet, or even one they go on to Cancel.
+  // Redirecting to win.close() reuses that same prompt (see createWindow's
+  // "close" handler) instead of duplicating it here; once the user
+  // actually confirms, allowMainWindowClose lets this same check pass
+  // through on the next before-quit app.quit() triggers.
+  if (!allowMainWindowClose && isDirty && win) {
+    event.preventDefault();
+    win.close();
+    return;
+  }
   isQuitting = true;
   backendProc?.kill();
 });

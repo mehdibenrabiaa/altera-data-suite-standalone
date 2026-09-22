@@ -28,6 +28,7 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, "index.html"),
         settings: resolve(__dirname, "settings.html"),
+        closeConfirm: resolve(__dirname, "close-confirm.html"),
         filterBuilder: resolve(__dirname, "filter-builder.html"),
         browse: resolve(__dirname, "browse.html"),
         summary: resolve(__dirname, "summary.html"),

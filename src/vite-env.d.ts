@@ -357,12 +357,23 @@ declare global {
   interface Window {
     alteraStudio: {
       backendUrl: string;
+      platform: NodeJS.Platform;
       openPdfDialog: () => Promise<string | null>;
       readFileBase64: (path: string) => Promise<string>;
       saveProjectAs: (jsonData: string) => Promise<string | null>;
       saveProjectToPath: (filePath: string, jsonData: string) => Promise<boolean>;
       openProjectDialog: () => Promise<{ path: string; data: string } | null>;
       restartApp: () => void;
+      quitApp: () => void;
+      onMenuAction: (cb: (action: string) => void) => () => void;
+      reportDirtyState: (dirty: boolean) => void;
+      reportTheme: (theme: "light" | "dark") => void;
+      onSaveBeforeClose: (cb: () => void) => () => void;
+      confirmSaveBeforeClose: () => void;
+      reportSaveBeforeCloseFailed: () => void;
+      closeConfirmChoice: (choice: "save" | "discard" | "cancel") => void;
+      onCloseConfirmSaveFailed: (cb: () => void) => () => void;
+      setTaskbarProgress: (value: number) => void;
       openExternalUrl: (url: string) => void;
       openSettingsWindow: (payload: SettingsPayload) => void;
       loadPersistedSettings: () => Promise<PersistedSettings | null>;

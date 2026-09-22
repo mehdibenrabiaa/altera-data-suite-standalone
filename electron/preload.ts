@@ -2,6 +2,11 @@ import { contextBridge, ipcRenderer } from "electron";
 
 contextBridge.exposeInMainWorld("alteraStudio", {
   backendUrl: "http://127.0.0.1:8756",
+  // Lets the renderer tell macOS apart from Windows/Linux -- App.tsx uses
+  // this to skip rendering its own in-page MenuBar on macOS, where
+  // main.ts installs a real native File/Edit/Help menu instead (see that
+  // file's buildNativeMenu).
+  platform: process.platform,
   openPdfDialog: (): Promise<string | null> => ipcRenderer.invoke("dialog:openPdf"),
   readFileBase64: (path: string): Promise<string> => ipcRenderer.invoke("fs:readFileBase64", path),
 
@@ -13,6 +18,70 @@ contextBridge.exposeInMainWorld("alteraStudio", {
   openProjectDialog: (): Promise<{ path: string; data: string } | null> => ipcRenderer.invoke("project:open"),
   restartApp: (): void => {
     ipcRenderer.send("app:restart");
+  },
+  // Unsaved-changes guard (main.ts's win.on("close", ...)) -- App.tsx
+  // reports its own dirty flag here on every change so main can check it
+  // synchronously when the window is about to close, rather than needing
+  // an async round-trip at close time.
+  reportDirtyState: (dirty: boolean): void => {
+    ipcRenderer.send("app:dirty-state", dirty);
+  },
+  // Lets main open the native unsaved-changes prompt (CloseConfirmWindow.tsx,
+  // see main.ts's openCloseConfirmWindow) already in the right theme --
+  // that window is created by main itself, not asked for by this renderer,
+  // so it has no other way to know which theme is currently active.
+  reportTheme: (theme: "light" | "dark"): void => {
+    ipcRenderer.send("app:theme-state", theme);
+  },
+  // Fired when the user picks "Save" on the native unsaved-changes prompt
+  // -- the save logic itself lives here (not in that tiny window), so
+  // main hands the actual work back to this renderer, and this reports
+  // whether it actually happened: `confirmSaveBeforeClose` if so (lets
+  // the window finish closing), `reportSaveBeforeCloseFailed` if Save As's
+  // native dialog was cancelled (so the prompt drops out of "Saving…"
+  // instead of closing as if it had succeeded).
+  onSaveBeforeClose: (cb: () => void): (() => void) => {
+    const listener = () => cb();
+    ipcRenderer.on("app:save-before-close", listener);
+    return () => ipcRenderer.removeListener("app:save-before-close", listener);
+  },
+  confirmSaveBeforeClose: (): void => {
+    ipcRenderer.send("app:save-before-close-done");
+  },
+  reportSaveBeforeCloseFailed: (): void => {
+    ipcRenderer.send("app:save-before-close-failed");
+  },
+  // Windows/Linux taskbar (and macOS dock) progress indicator during a
+  // Convert run -- value in [0, 1], 2 for indeterminate, -1 to clear.
+  setTaskbarProgress: (value: number): void => {
+    ipcRenderer.send("app:set-taskbar-progress", value);
+  },
+  // Splash window's own close button (see public/splash.html) -- there's
+  // no menu bar or window chrome to quit from before the main window
+  // exists, so this is the only way out of the app during that gap.
+  quitApp: (): void => {
+    ipcRenderer.send("app:quit");
+  },
+  // CloseConfirmWindow.tsx only -- its Save/Don't Save/Cancel buttons all
+  // funnel through this one channel.
+  closeConfirmChoice: (choice: "save" | "discard" | "cancel"): void => {
+    ipcRenderer.send("closeConfirm:choice", choice);
+  },
+  // CloseConfirmWindow.tsx only -- see onSaveBeforeClose's own comment
+  // above for why this exists.
+  onCloseConfirmSaveFailed: (cb: () => void): (() => void) => {
+    const listener = () => cb();
+    ipcRenderer.on("closeConfirm:save-failed", listener);
+    return () => ipcRenderer.removeListener("closeConfirm:save-failed", listener);
+  },
+  // macOS only: the native menu (main.ts's buildNativeMenu) has no direct
+  // access to App.tsx's handlers, so each click just forwards its action
+  // name here for App.tsx to dispatch to the same functions the in-page
+  // MenuBar already calls directly on Windows.
+  onMenuAction: (cb: (action: string) => void): (() => void) => {
+    const listener = (_event: unknown, action: string) => cb(action);
+    ipcRenderer.on("menu:action", listener);
+    return () => ipcRenderer.removeListener("menu:action", listener);
   },
   // Opens a URL in the user's default browser instead of navigating this
   // window -- used by the Help menu's About/Docs links (see MenuBar.tsx).

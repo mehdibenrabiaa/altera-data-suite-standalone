@@ -4,7 +4,7 @@ import type { PageFilterParams } from "./types";
 import type { PageFilterWindowPayload } from "./vite-env";
 import "./App.css";
 
-const antTheme = { token: { borderRadius: 0, borderRadiusLG: 0, borderRadiusSM: 0, controlHeight: 28, fontSize: 13, fontFamily: '"Google Sans Flex", sans-serif', colorPrimary: "#FE4D41", colorText: "#1a1a1a", colorBgContainer: "#fff" } };
+const antTheme = { token: { borderRadius: 0, borderRadiusLG: 0, borderRadiusSM: 0, controlHeight: 28, fontSize: 13, fontFamily: '"Google Sans Flex", sans-serif', colorPrimary: "#FE4D41", colorText: "#1b1f27", colorBgContainer: "#fff" } };
 export default function PageFilterWindow() {
   const [payload, setPayload] = useState<PageFilterWindowPayload | null>(null);
   const [mode, setMode] = useState<PageFilterParams["mode"]>("keep");
