@@ -5,6 +5,7 @@ import "./App.css";
 import PreferencesTab from "./components/PreferencesTab";
 import AppearanceTab from "./components/AppearanceTab";
 import ActivationTab from "./components/ActivationTab";
+import PluginsTab from "./components/PluginsTab";
 import AboutTab from "./components/AboutTab";
 import type { SystemVersionInfo } from "./components/ActivationTab";
 import type { SettingsPayload } from "./types";
@@ -171,6 +172,11 @@ export default function SettingsWindow() {
           onSystemInfo={handleSystemInfo}
         />
       ),
+    },
+    {
+      key: "plugins",
+      label: "Plugins",
+      children: <PluginsTab />,
     },
     {
       key: "about",

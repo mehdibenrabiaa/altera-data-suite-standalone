@@ -1,10 +1,16 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import pdf_converter, licensing, nodes
+from app import plugins
+from app.routers import pdf_converter, licensing, nodes, plugins as plugins_router
 from app.ws_manager import manager
 
 app = FastAPI(title="Altera Data Suite Backend")
+
+# Populates plugins.list_plugins()/get_all_transforms() before the first
+# /nodes/run or /plugins/list request -- without this, a freshly started
+# backend would report zero plugins until something calls /plugins/reload.
+plugins.reload_plugins()
 
 # Dev-only: the renderer is a Vite dev server on a different origin. Tighten
 # this once the app is packaged and the renderer is loaded from disk instead.
@@ -18,6 +24,7 @@ app.add_middleware(
 app.include_router(pdf_converter.router)
 app.include_router(licensing.router)
 app.include_router(nodes.router)
+app.include_router(plugins_router.router)
 
 
 @app.get("/health")

@@ -51,6 +51,9 @@ export default defineConfig({
         pivotColumns: resolve(__dirname, "pivot-columns.html"),
         addColumn: resolve(__dirname, "add-column.html"),
         conditionalColumn: resolve(__dirname, "conditional-column.html"),
+        // Shared by every plugin node (src/plugins.ts) -- the one entry
+        // that stays fixed no matter how many plugins get installed later.
+        pluginNode: resolve(__dirname, "plugin-node.html"),
       },
     },
   },

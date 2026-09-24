@@ -160,6 +160,24 @@ export interface SortAppliedPayload {
   nodeId: string;
   params: SortParams;
 }
+// Plugin nodes (src/plugins.ts) all share this one window/payload shape --
+// the manifest's own `fields` array is what makes each plugin's form
+// different, not a dedicated TS type per plugin the way every built-in
+// node above has.
+export interface PluginNodeWindowPayload {
+  nodeId: string;
+  nodeName: string;
+  pluginId: string;
+  pluginName: string;
+  fields: import("./plugins").PluginField[];
+  columns: string[];
+  initialParams: Record<string, unknown>;
+  theme: "light" | "dark";
+}
+export interface PluginNodeAppliedPayload {
+  nodeId: string;
+  params: Record<string, unknown>;
+}
 export interface AggregateWindowPayload {
   nodeId: string;
   nodeName: string;
@@ -668,6 +686,24 @@ declare global {
       onConditionalColumnInit: (cb: (payload: ConditionalColumnWindowPayload) => void) => () => void;
       applyConditionalColumn: (payload: ConditionalColumnAppliedPayload) => void;
       closeConditionalColumnWindow: () => void;
+
+      // The one shared Configure window for every plugin node -- same
+      // real-window, round-trips-on-Apply IPC shape as every built-in
+      // node's own window above, just parameterized by pluginId/fields
+      // instead of getting its own dedicated htmlFile/ipcMain channels.
+      openPluginNodeWindow: (payload: PluginNodeWindowPayload) => void;
+      onPluginNodeApplied: (cb: (payload: PluginNodeAppliedPayload) => void) => () => void;
+      requestPluginNodeInit: (nodeId: string) => Promise<PluginNodeWindowPayload>;
+      onPluginNodeInit: (cb: (payload: PluginNodeWindowPayload) => void) => () => void;
+      applyPluginNode: (payload: PluginNodeAppliedPayload) => void;
+      closePluginNodeWindow: () => void;
+
+      // Plugin install/uninstall -- see electron/main.ts's plugin:* handlers
+      // and backend/app/plugins.py. install returns an error string on
+      // failure (bad zip/manifest), or null on success; both resolve once
+      // the backend has finished its own /plugins/reload.
+      installPlugin: () => Promise<string | null>;
+      uninstallPlugin: (pluginId: string) => Promise<string | null>;
 
       // Main window: closes whichever kept-alive per-node window
       // (Configure, Browse, Header Promoter, Merge, Shift Columns,

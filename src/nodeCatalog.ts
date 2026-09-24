@@ -29,6 +29,8 @@
 // Alteryx's own grouping and keeps Preparation from becoming a catch-all.
 // "analysis" has no Alteryx equivalent used here -- see its own comment
 // further down, by Summary/Aggregate's entries.
+import { getPluginCatalog } from "./plugins";
+
 export type CategoryKey = "io" | "conversion" | "preparation" | "transform" | "join" | "parse" | "analysis";
 
 export interface NodeCatalogEntry {
@@ -172,4 +174,12 @@ export const NODE_CATALOG: NodeCatalogEntry[] = [
 
 export function toDraggedNodeEntry(n: NodeCatalogEntry): DraggedNodeEntry {
   return { name: n.name, icon: n.icon, color: CATEGORY_META[n.category].color, hasOutput: n.hasOutput, hasExtraInput: n.hasExtraInput, hasInput: n.hasInput };
+}
+
+// The built-in catalog above plus whatever first-party plugin nodes are
+// currently installed (see plugins.ts) -- the one thing NodesPanel.tsx and
+// SchemaView.tsx's quick-add picker should list, instead of NODE_CATALOG
+// directly, so an installed plugin shows up right alongside the built-ins.
+export function getAllNodes(): NodeCatalogEntry[] {
+  return [...NODE_CATALOG, ...getPluginCatalog()];
 }

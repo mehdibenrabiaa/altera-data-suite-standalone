@@ -653,6 +653,36 @@ contextBridge.exposeInMainWorld("alteraStudio", {
     ipcRenderer.send("conditionalColumn:close");
   },
 
+  // The one shared Configure window for every plugin node -- same
+  // real-window, round-trips-on-Apply pattern as every other Configure
+  // window above.
+  openPluginNodeWindow: (payload: unknown): void => {
+    ipcRenderer.invoke("pluginNode:open", payload);
+  },
+  onPluginNodeApplied: (cb: (payload: unknown) => void): (() => void) => {
+    const listener = (_event: unknown, payload: unknown) => cb(payload);
+    ipcRenderer.on("pluginNode:applied", listener);
+    return () => ipcRenderer.removeListener("pluginNode:applied", listener);
+  },
+  requestPluginNodeInit: (nodeId: string): Promise<unknown> => ipcRenderer.invoke("pluginNode:request-init", nodeId),
+  onPluginNodeInit: (cb: (payload: unknown) => void): (() => void) => {
+    const listener = (_event: unknown, payload: unknown) => cb(payload);
+    ipcRenderer.on("pluginNode:init", listener);
+    return () => ipcRenderer.removeListener("pluginNode:init", listener);
+  },
+  applyPluginNode: (payload: unknown): void => {
+    ipcRenderer.send("pluginNode:apply", payload);
+  },
+  closePluginNodeWindow: (): void => {
+    ipcRenderer.send("pluginNode:close");
+  },
+
+  // Install: folder/zip picker -> validated + copied into userData/plugins
+  // -> backend told to reload. Returns an error string on failure, null on
+  // success. See electron/main.ts's plugin:install/plugin:uninstall.
+  installPlugin: (): Promise<string | null> => ipcRenderer.invoke("plugin:install"),
+  uninstallPlugin: (pluginId: string): Promise<string | null> => ipcRenderer.invoke("plugin:uninstall", pluginId),
+
   // Main window: closes whichever kept-alive window (Configure or Browse)
   // is currently showing this node, if any -- called once per deleted
   // processor node so an open per-node window doesn't outlive the node

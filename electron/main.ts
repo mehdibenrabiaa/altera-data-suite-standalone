@@ -110,7 +110,16 @@ function startBackend() {
   backendProc = spawn(
     venvPython,
     ["-m", "uvicorn", "app.main:app", "--port", String(BACKEND_PORT)],
-    { cwd, stdio: "inherit" },
+    {
+      cwd,
+      stdio: "inherit",
+      // Tells the backend where to look for installed plugins
+      // (backend/app/plugins.py's PLUGIN_DIR) -- the same userData folder
+      // WINDOW_STATE_FILE/SETTINGS_FILE already use below, so plugin
+      // packages live alongside this app's other per-user data instead of
+      // inside the install directory.
+      env: { ...process.env, ALTERA_USER_DATA_DIR: app.getPath("userData") },
+    },
   );
   // stdio: "inherit" sends the backend's own errors to this process's
   // console -- invisible in a packaged build, which has none. Without
@@ -550,7 +559,7 @@ ipcMain.on("settings:close", () => {
 // in the Maps below. Actually destroyed (not just hidden) when the node
 // itself is deleted (see node:deleted further down), since a deleted
 // node's window can never be reopened and would otherwise leak forever.
-function createPerNodeWindowManager(kind: "filterBuilder" | "browse" | "summary" | "headerPromoter" | "merge" | "shiftColumns" | "cleaner" | "textParser" | "unique" | "columnEdit" | "changeType" | "regex" | "cascadeFill" | "export" | "unpivotColumns" | "pivotColumns" | "addColumn" | "conditionalColumn" | "inputData" | "sort" | "aggregate" | "pageFilter", opts: {
+function createPerNodeWindowManager(kind: "filterBuilder" | "browse" | "summary" | "headerPromoter" | "merge" | "shiftColumns" | "cleaner" | "textParser" | "unique" | "columnEdit" | "changeType" | "regex" | "cascadeFill" | "export" | "unpivotColumns" | "pivotColumns" | "addColumn" | "conditionalColumn" | "inputData" | "sort" | "aggregate" | "pageFilter" | "pluginNode", opts: {
   width: number; height: number; minWidth: number; minHeight: number; title: string; htmlFile: string; icon?: string;
 }) {
   const windows = new Map<string, BrowserWindow>();
@@ -780,6 +789,22 @@ ipcMain.on("aggregate:apply", (event, payload: { nodeId: string; [key: string]: 
   BrowserWindow.fromWebContents(event.sender)?.hide();
 });
 
+// The one shared Configure window for every plugin node -- unlike every
+// built-in node above, this ISN'T one manager per node kind: PluginNodeWindow.tsx
+// renders a form purely from whatever manifest/fields payload openPluginNodeWindow
+// was called with, so a newly installed plugin needs zero new code here.
+// No per-kind icon (opts.icon omitted -- falls back to APP_ICON) since a
+// plugin's own icon is an SVG served by the backend, and this window's OS
+// icon can only be a rasterized PNG/ICO shipped with the app itself.
+const pluginNodeManager = createPerNodeWindowManager("pluginNode", {
+  width: 480, height: 560, minWidth: 400, minHeight: 380, title: "Configure Node", htmlFile: "plugin-node.html",
+});
+
+ipcMain.on("pluginNode:apply", (event, payload: { nodeId: string; [key: string]: unknown }) => {
+  win?.webContents.send("pluginNode:applied", payload);
+  BrowserWindow.fromWebContents(event.sender)?.hide();
+});
+
 // Unique -- same real-Configure-window, round-trips-on-Apply shape as
 // Filter Builder/Header Promoter/Merge/Shift Columns/Cleaner above.
 const uniqueManager = createPerNodeWindowManager("unique", {
@@ -988,6 +1013,7 @@ ipcMain.on("node:deleted", (_event, nodeId: string) => {
   sortManager.closeForNode(nodeId);
   pageFilterManager.closeForNode(nodeId);
   aggregateManager.closeForNode(nodeId);
+  pluginNodeManager.closeForNode(nodeId);
 });
 
 // Windows/Linux: keep the in-page menu bar (src/panels/MenuBar.tsx) --
@@ -1094,6 +1120,75 @@ ipcMain.handle("project:open", async () => {
   if (canceled || !filePaths[0]) return null;
   const data = await fs.readFile(filePaths[0], "utf-8");
   return { path: filePaths[0], data };
+});
+
+// Plugin install/uninstall -- see backend/app/plugins.py for the loader
+// this reload call feeds, and src/plugins.ts for the frontend side that
+// re-fetches /plugins/list right after these resolve. Folder-only (not a
+// .zip) for now: keeps this to plain fs.cp/fs.rm instead of pulling in a
+// zip-extraction dependency, since v1 plugins are team-authored and handed
+// out as a folder, not sold through any kind of store.
+function pluginsDir() {
+  return path.join(app.getPath("userData"), "plugins");
+}
+
+async function reloadBackendPlugins() {
+  try {
+    await fetch(`http://127.0.0.1:${BACKEND_PORT}/plugins/reload`, { method: "POST" });
+  } catch {
+    // Backend not up yet (e.g. install attempted during startup) -- it
+    // scans PLUGIN_DIR on its own next startup anyway, so this is safe to
+    // swallow rather than surface as an install failure.
+  }
+}
+
+ipcMain.handle("plugin:install", async (): Promise<string | null> => {
+  if (!win) return "Main window not available.";
+  const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+    title: "Install Plugin (select its folder)",
+    properties: ["openDirectory"],
+  });
+  if (canceled || !filePaths[0]) return null;
+  const source = filePaths[0];
+
+  let manifest: { id?: unknown };
+  try {
+    const raw = await fs.readFile(path.join(source, "manifest.json"), "utf-8");
+    manifest = JSON.parse(raw);
+  } catch (err) {
+    return `Couldn't read manifest.json in that folder: ${(err as Error).message}`;
+  }
+  const id = manifest.id;
+  // A plugin id becomes a literal path segment below (userData/plugins/<id>)
+  // -- rejects anything that isn't a plain slug so a malformed/malicious
+  // manifest.json can't write outside the plugins folder (e.g. id: "../..").
+  if (typeof id !== "string" || !/^[a-zA-Z0-9_-]+$/.test(id)) {
+    return "manifest.json's \"id\" must be a plain alphanumeric/underscore/hyphen string.";
+  }
+
+  const target = path.join(pluginsDir(), id);
+  try {
+    await fs.rm(target, { recursive: true, force: true });
+    await fs.mkdir(pluginsDir(), { recursive: true });
+    await fs.cp(source, target, { recursive: true });
+  } catch (err) {
+    return `Couldn't install plugin: ${(err as Error).message}`;
+  }
+  await reloadBackendPlugins();
+  return null;
+});
+
+ipcMain.handle("plugin:uninstall", async (_event, pluginId: string): Promise<string | null> => {
+  if (typeof pluginId !== "string" || !/^[a-zA-Z0-9_-]+$/.test(pluginId)) {
+    return "Invalid plugin id.";
+  }
+  try {
+    await fs.rm(path.join(pluginsDir(), pluginId), { recursive: true, force: true });
+  } catch (err) {
+    return `Couldn't remove plugin: ${(err as Error).message}`;
+  }
+  await reloadBackendPlugins();
+  return null;
 });
 
 // File > Restart -- relaunch schedules a fresh instance to start once this

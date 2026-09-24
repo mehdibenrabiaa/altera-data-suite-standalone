@@ -1,4 +1,5 @@
-import { CATEGORY_META, CATEGORY_ORDER, NODE_CATALOG, NODE_DRAG_MIME, toDraggedNodeEntry, type DraggedNodeEntry } from "../nodeCatalog";
+import { CATEGORY_META, CATEGORY_ORDER, NODE_DRAG_MIME, getAllNodes, toDraggedNodeEntry, type DraggedNodeEntry } from "../nodeCatalog";
+import { usePlugins } from "../plugins";
 
 interface NodesPanelProps {
   // Click-to-add path: no drop position, so the caller falls back to a
@@ -8,12 +9,18 @@ interface NodesPanelProps {
 }
 
 export default function NodesPanel({ onAddNode }: NodesPanelProps) {
+  // Re-renders this panel as soon as plugins finish their initial load (or
+  // one gets installed/uninstalled) -- see plugins.ts's own comment on why
+  // this is the one place that needs to subscribe rather than just calling
+  // getAllNodes() plainly.
+  usePlugins();
+  const allNodes = getAllNodes();
   return (
     <div className="nodes-panel">
       <div className="nodes-panel-scroll">
         {CATEGORY_ORDER.map((key) => {
           const meta = CATEGORY_META[key];
-          const items = NODE_CATALOG.filter((n) => n.category === key);
+          const items = allNodes.filter((n) => n.category === key);
           if (items.length === 0) return null;
           return (
             <div key={key} className="nodes-panel-category">

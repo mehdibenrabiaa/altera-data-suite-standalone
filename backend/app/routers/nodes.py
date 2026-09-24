@@ -5,7 +5,7 @@ import pandas as pd
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from app.nodes import NODE_TRANSFORMS
+from app.plugins import get_all_transforms
 
 router = APIRouter(prefix="/nodes", tags=["nodes"])
 
@@ -43,7 +43,7 @@ class RunNodeRequest(BaseModel):
 @router.post("/run")
 def run_node(req: RunNodeRequest):
     try:
-        transform = NODE_TRANSFORMS[req.kind]
+        transform = get_all_transforms()[req.kind]
     except KeyError:
         raise HTTPException(400, f"Unknown node kind: {req.kind}")
     try:

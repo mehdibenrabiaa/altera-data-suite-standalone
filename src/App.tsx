@@ -59,6 +59,7 @@ import { pickNextColor, fillToHex, hexToFillStroke, fillWithAlpha, fillAlpha } f
 import { uniqueRectName } from "./rectUtils";
 import { createBackendBridge } from "./backendBridge";
 import { getInputPortMax } from "./nodeCatalog";
+import { refreshPlugins } from "./plugins";
 
 // Configure PDF.js worker - Use local file
 pdfjsLib.GlobalWorkerOptions.workerSrc = "./pdf.worker.min.js";
@@ -999,6 +1000,14 @@ const KonvaA4Editor = () => {
   // skipped below, and its clicks are dispatched via the onMenuAction
   // effect further down instead of MenuBar's direct prop callbacks.
   const isMac = window.alteraStudio.platform === "darwin";
+
+  // Populates plugins.ts's store as early as possible -- NodesPanel/
+  // SchemaView's quick-add picker both subscribe via usePlugins() and
+  // re-render once this resolves, so any installed plugin node is visible
+  // well before a user could reach for it.
+  useEffect(() => {
+    refreshPlugins();
+  }, []);
 
   const [scale, setScale] = useState(1);
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
@@ -2865,6 +2874,11 @@ const KonvaA4Editor = () => {
   useEffect(() => {
     return window.alteraStudio.onAggregateApplied(({ nodeId, params }) => {
       handleUpdateProcessorNodeParams(nodeId, params as unknown as Record<string, unknown>);
+    });
+  }, [handleUpdateProcessorNodeParams]);
+  useEffect(() => {
+    return window.alteraStudio.onPluginNodeApplied(({ nodeId, params }) => {
+      handleUpdateProcessorNodeParams(nodeId, params);
     });
   }, [handleUpdateProcessorNodeParams]);
   useEffect(() => {

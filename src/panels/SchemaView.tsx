@@ -36,10 +36,11 @@ import {
   NODE_DRAG_MIME,
   CATEGORY_META,
   CATEGORY_ORDER,
-  NODE_CATALOG,
+  getAllNodes,
   toDraggedNodeEntry,
   type DraggedNodeEntry,
 } from "../nodeCatalog";
+import { usePlugins, getPluginByName, getKindSlugForPlugin } from "../plugins";
 import { runProcessorNode, type NodeTableInput } from "../nodeExecution";
 import { resolveDisplayColumnType, DETECTION_SAMPLE_ROWS, type AppliedColumnType } from "../columnTypeDetection";
 import { useGridCellCopy } from "../gridCellCopy";
@@ -129,6 +130,29 @@ const NODE_WINDOW_LABEL: Record<string, string> = {
   "Group By": "Configure…",
 };
 const NODE_KINDS_WITH_WINDOW = new Set(Object.keys(NODE_WINDOW_LABEL));
+
+// Plugin nodes (src/plugins.ts) layer onto the four maps above instead of
+// being added to them directly -- they're populated at runtime from an
+// installed plugin's manifest, not known at module-load time. Every
+// plugin node is always runnable and always has a (generic) Configure
+// window, since a manifest with an empty `fields` array is still valid.
+function isRunnableKind(catalogName: string): boolean {
+  return RUNNABLE_NODE_KINDS.has(catalogName) || !!getPluginByName(catalogName);
+}
+function hasConfigWindow(catalogName: string): boolean {
+  return NODE_KINDS_WITH_WINDOW.has(catalogName) || !!getPluginByName(catalogName);
+}
+function windowLabelFor(catalogName: string): string {
+  return NODE_WINDOW_LABEL[catalogName] ?? "Configure…";
+}
+function kindSlugFor(catalogName: string): string | undefined {
+  return NODE_KIND_SLUGS[catalogName] ?? getKindSlugForPlugin(catalogName);
+}
+function minInputsFor(catalogName: string): number {
+  if (catalogName in NODE_MIN_INPUTS) return NODE_MIN_INPUTS[catalogName];
+  const plugin = getPluginByName(catalogName);
+  return plugin ? (plugin.hasInput ? 1 : 0) : 1;
+}
 
 // Column "type" for a Configure dialog's per-column operator/value-editor
 // choice -- mirrors the original widget's build_columns_json_for_filter
@@ -783,7 +807,7 @@ function ProcessorNode({ id, data }: NodeProps<Node<ProcessorNodeData>>) {
         // landing there instead of the icon used to fall straight through
         // to the pane every time.
         e.stopPropagation();
-        if (NODE_KINDS_WITH_WINDOW.has(data.catalogName)) configureCtx?.onConfigure(id);
+        if (hasConfigWindow(data.catalogName)) configureCtx?.onConfigure(id);
       }}
     >
       <div className="schema-processor-node-core node-port-anchor">
@@ -814,9 +838,9 @@ function ProcessorNode({ id, data }: NodeProps<Node<ProcessorNodeData>>) {
         {data.hasOutput !== false && (
           <Handle type="source" position={Position.Right} className="node-port-triangle node-port-triangle-out" />
         )}
-        {RUNNABLE_NODE_KINDS.has(data.catalogName) && <NodeMessageBadge status={runStatus} />}
+        {isRunnableKind(data.catalogName) && <NodeMessageBadge status={runStatus} />}
       </div>
-      {RUNNABLE_NODE_KINDS.has(data.catalogName) && <NodeStatusLights status={runStatus} />}
+      {isRunnableKind(data.catalogName) && <NodeStatusLights status={runStatus} />}
       {/* Absolutely positioned (see .schema-processor-node-labels in
           App.css) so the name/description text -- which can be much wider
           than the 42px icon once it wraps -- never inflates THIS node's
@@ -1222,6 +1246,11 @@ export default function SchemaView({
   onConversionPageFilterChange,
   visible,
 }: SchemaViewProps) {
+  // Re-renders this component (and so its quick-add picker below) as soon
+  // as plugins finish loading, or one gets installed/uninstalled -- see
+  // plugins.ts's own comment. The returned array's identity changes on
+  // every plugin-list update, so it also works as a useMemo dep below.
+  const pluginEntries = usePlugins();
   const {
     onCellKeyDown: onOutputCellKeyDown, onCellContextMenu: onOutputCellContextMenu, suppressContextMenu: suppressOutputContextMenu, contextMenu: outputCellContextMenu,
     onGridReady: onOutputGridReady, onCellMouseDown: onOutputCellMouseDown, onCellMouseOver: onOutputCellMouseOver, rangeCellClass: outputRangeCellClass,
@@ -1967,7 +1996,7 @@ export default function SchemaView({
     if (!selectionCtxMenu) return [];
     return selectionCtxMenu.nodeIds.filter((id) => {
       const proc = processorNodes.find((p) => p.id === id);
-      return proc && RUNNABLE_NODE_KINDS.has(proc.catalogName);
+      return proc && isRunnableKind(proc.catalogName);
     });
   }, [selectionCtxMenu, processorNodes]);
 
@@ -2748,6 +2777,41 @@ export default function SchemaView({
     });
   }, [processorNodes, resolveBrowseInput, theme]);
 
+  // The one Configure window shared by every plugin node (vs. a dedicated
+  // window per kind like every built-in node above) -- PluginNodeWindow.tsx
+  // renders a form from the manifest's own `fields` array. Falls back to
+  // each field's `default` (or a sensible per-type empty value) the first
+  // time a node's Configure window opens, same "seed a starting value"
+  // pattern as Sort's own initial sort key above.
+  const handleOpenPluginNode = useCallback((id: string) => {
+    const proc = processorNodes.find((p) => p.id === id);
+    if (!proc) return;
+    const plugin = getPluginByName(proc.catalogName);
+    if (!plugin) return;
+    const primary = resolveNodeInputs(id)[0];
+    const existingParams = (proc.params as Record<string, unknown> | undefined) ?? {};
+    const seededParams: Record<string, unknown> = { ...existingParams };
+    for (const field of plugin.fields) {
+      if (seededParams[field.key] !== undefined) continue;
+      if (field.default !== undefined) seededParams[field.key] = field.default;
+      else if (field.type === "columns") seededParams[field.key] = [];
+      else if (field.type === "toggle") seededParams[field.key] = false;
+      else if (field.type === "column" || field.type === "select") seededParams[field.key] = (field.options ?? primary?.columns)?.[0] ?? "";
+      else seededParams[field.key] = "";
+    }
+    window.alteraStudio.openPluginNodeWindow({
+      nodeId: id,
+      nodeName: proc.name || proc.catalogName,
+      pluginId: plugin.id,
+      pluginName: plugin.name,
+      fields: plugin.fields,
+      columns: primary?.columns ?? [],
+      initialParams: seededParams,
+      theme,
+    });
+    closeNodeCtxMenu();
+  }, [processorNodes, resolveNodeInputs, closeNodeCtxMenu, theme]);
+
   // Single entry point for "open this node's window" (the icon double-
   // click and the context-menu item both go through this), dispatching to
   // whichever specific opener the node's catalog kind actually needs --
@@ -2791,8 +2855,13 @@ export default function SchemaView({
     else if (proc?.catalogName === "Sort") handleOpenSort(id);
     else if (proc?.catalogName === "Page Filter") handleOpenPageFilter(id);
     else if (proc?.catalogName === "Aggregate" || proc?.catalogName === "Group By") handleOpenAggregate(id);
+    // Must come before the Filter Builder fallback below -- every catalog
+    // name reaching this point that ISN'T one of the built-ins above is
+    // otherwise silently treated as Filter Builder, which a plugin node's
+    // own (unrecognized) name would hit too.
+    else if (proc && getPluginByName(proc.catalogName)) handleOpenPluginNode(id);
     else handleOpenFilterBuilder(id);
-  }, [processorNodes, handleOpenBrowse, handleOpenSummary, handleOpenHeaderPromoter, handleOpenMerge, handleOpenShiftColumns, handleOpenCleaner, handleOpenUnique, handleOpenColumnEdit, handleOpenChangeType, handleOpenRegex, handleOpenTextParser, handleOpenCascadeFill, handleOpenExport, handleOpenUnpivotColumns, handleOpenPivotColumns, handleOpenAddColumn, handleOpenConditionalColumn, handleOpenInputData, handleOpenSort, handleOpenPageFilter, handleOpenAggregate, handleOpenFilterBuilder, onNodesChange]);
+  }, [processorNodes, handleOpenBrowse, handleOpenSummary, handleOpenHeaderPromoter, handleOpenMerge, handleOpenShiftColumns, handleOpenCleaner, handleOpenUnique, handleOpenColumnEdit, handleOpenChangeType, handleOpenRegex, handleOpenTextParser, handleOpenCascadeFill, handleOpenExport, handleOpenUnpivotColumns, handleOpenPivotColumns, handleOpenAddColumn, handleOpenConditionalColumn, handleOpenInputData, handleOpenSort, handleOpenPageFilter, handleOpenAggregate, handleOpenPluginNode, handleOpenFilterBuilder, onNodesChange]);
 
   // `select`: only true for a user-initiated single-node run (the context
   // menu's "Run"), which is the one case selecting the node to show its
@@ -2811,11 +2880,11 @@ export default function SchemaView({
 
     const proc = processorNodes.find((p) => p.id === id);
     if (!proc) return;
-    const kind = NODE_KIND_SLUGS[proc.catalogName];
+    const kind = kindSlugFor(proc.catalogName);
     if (!kind) return;
 
     const inputs = resolveNodeInputs(id);
-    const minInputs = NODE_MIN_INPUTS[proc.catalogName] ?? 1;
+    const minInputs = minInputsFor(proc.catalogName);
     if (inputs.length < minInputs) {
       // Bails out to the exact same `prev` reference (a real React no-op,
       // no re-render) when the status is already this same error --
@@ -2991,7 +3060,7 @@ export default function SchemaView({
   const lastExportParamsRef = useRef<Record<string, string>>({});
   useEffect(() => {
     processorNodes.forEach((proc) => {
-      if (!RUNNABLE_NODE_KINDS.has(proc.catalogName)) return;
+      if (!isRunnableKind(proc.catalogName)) return;
       if (proc.catalogName === "Export") {
         const paramsJson = JSON.stringify(proc.params ?? {});
         const paramsChanged = lastExportParamsRef.current[proc.id] !== paramsJson;
@@ -3011,7 +3080,7 @@ export default function SchemaView({
       }
       if (nodeRunStatus[proc.id]?.state === "running") return;
       const inputs = resolveNodeInputs(proc.id);
-      if (inputs.length < (NODE_MIN_INPUTS[proc.catalogName] ?? 1)) {
+      if (inputs.length < minInputsFor(proc.catalogName)) {
         // Mirrors handleRunProcessorNode's own "drop the last successful
         // output" cleanup (see its comment) -- but that cleanup only runs
         // when handleRunProcessorNode itself gets called with insufficient
@@ -3029,8 +3098,8 @@ export default function SchemaView({
         // a node that was simply never connected yet doesn't spam a
         // status/output write on every unrelated re-render.
         delete lastAutoRunInputsRef.current[proc.id];
-        const message = (NODE_MIN_INPUTS[proc.catalogName] ?? 1) > 1
-          ? `Connect at least ${NODE_MIN_INPUTS[proc.catalogName]} converted tables (run Convert first).`
+        const message = minInputsFor(proc.catalogName) > 1
+          ? `Connect at least ${minInputsFor(proc.catalogName)} converted tables (run Convert first).`
           : "Connect a converted table (run Convert first).";
         setNodeRunStatus((prev) =>
           prev[proc.id]?.state === "error" && prev[proc.id]?.error === message ? prev : { ...prev, [proc.id]: { state: "error", error: message } },
@@ -3067,7 +3136,7 @@ export default function SchemaView({
   // through the whole pipeline in one go, not just visually animate in
   // order.
   const handleRunAllProcessorNodes = useCallback(() => {
-    const runnableIds = processorNodes.filter((p) => RUNNABLE_NODE_KINDS.has(p.catalogName)).map((p) => p.id);
+    const runnableIds = processorNodes.filter((p) => isRunnableKind(p.catalogName)).map((p) => p.id);
     const order = topologicalRunOrder(runnableIds, edges, nodesRef.current);
     for (const id of order) {
       const proc = processorNodes.find((p) => p.id === id);
@@ -3164,9 +3233,10 @@ export default function SchemaView({
   }, [pickerOpen, closeNodePicker]);
 
   const pickerFilteredNodes = useMemo(() => {
+    const all = getAllNodes();
     const q = pickerQuery.trim().toLowerCase();
-    return q ? NODE_CATALOG.filter((n) => n.name.toLowerCase().includes(q)) : NODE_CATALOG;
-  }, [pickerQuery]);
+    return q ? all.filter((n) => n.name.toLowerCase().includes(q)) : all;
+  }, [pickerQuery, pluginEntries]);
   const pickerResults = useMemo(() => (
     CATEGORY_ORDER.map((key) => ({
       key,
@@ -3767,7 +3837,7 @@ export default function SchemaView({
           style={{ left: nodeCtxMenu.x, top: nodeCtxMenu.y }}
           onMouseDown={(e) => e.stopPropagation()}
         >
-          {RUNNABLE_NODE_KINDS.has(nodeCtxMenuTarget.catalogName) && (
+          {isRunnableKind(nodeCtxMenuTarget.catalogName) && (
             <>
               <div
                 className={`ctx-menu-item${nodeRunStatus[nodeCtxMenu.nodeId]?.state === "running" ? " disabled" : ""}`}
@@ -3786,13 +3856,13 @@ export default function SchemaView({
               <div className="ctx-menu-divider" />
             </>
           )}
-          {NODE_KINDS_WITH_WINDOW.has(nodeCtxMenuTarget.catalogName) && (
+          {hasConfigWindow(nodeCtxMenuTarget.catalogName) && (
             <>
               <div
                 className="ctx-menu-item"
                 onClick={() => handleOpenNodeWindow(nodeCtxMenu.nodeId)}
               >
-                <span>{NODE_WINDOW_LABEL[nodeCtxMenuTarget.catalogName]}</span>
+                <span>{windowLabelFor(nodeCtxMenuTarget.catalogName)}</span>
               </div>
               <div className="ctx-menu-divider" />
             </>
