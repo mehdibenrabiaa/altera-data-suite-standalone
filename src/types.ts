@@ -421,12 +421,16 @@ export interface SortParams {
 // backend/app/nodes.py's aggregate_columns). Order here IS the output
 // column order, so -- like Text Parser's operations -- this list is
 // reorderable, not just addable/removable.
-export type AggregateType = "sum" | "average" | "count" | "min" | "max" | "first" | "last" | "nth";
+export type AggregateType = "sum" | "average" | "count" | "min" | "max" | "first" | "last" | "nth" | "concatenate";
 export interface AggregateMetric {
   id: string;
   column: string;
   aggregation: AggregateType;
   occurrence?: number;
+  // "concatenate" only -- joins every non-blank value in the group with
+  // this (default ", " if unset, see backend/app/nodes.py's
+  // _concatenate_values).
+  delimiter?: string;
 }
 
 export interface PageFilterParams {

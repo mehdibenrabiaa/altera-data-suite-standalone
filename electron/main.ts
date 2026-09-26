@@ -1,8 +1,10 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, MenuItemConstructorOptions, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, MenuItemConstructorOptions, session, shell } from "electron";
+import { autoUpdater } from "electron-updater";
 import { spawn, ChildProcess } from "node:child_process";
 import path from "node:path";
 import fs from "node:fs/promises";
 import { readFileSync, writeFileSync } from "node:fs";
+import crypto from "node:crypto";
 
 // Only one copy of this app should ever run at once -- a second launch
 // would spawn its own backend process fighting the first one for the same
@@ -21,6 +23,18 @@ if (!app.requestSingleInstanceLock()) {
 app.setAppUserModelId("com.alteradatasuite.studio");
 
 const BACKEND_PORT = 8756;
+// Generated fresh every launch, never persisted -- required on every
+// request to the local backend (enforced by backend/app/main.py's own
+// middleware) so a malicious webpage open in the user's regular browser
+// can't drive-by attack the backend just by knowing it listens on
+// 127.0.0.1:8756 (a real risk: that backend has real side effects --
+// writing files via Export, installing plugins, etc. -- and CORS alone
+// doesn't stop a "blind" cross-origin request, only reading its response).
+// Injected into every one of THIS app's own requests centrally via
+// session.defaultSession.webRequest below, so no renderer code has to
+// remember to add it -- it can't be forgotten or bypassed by a future
+// fetch call site.
+const LOCAL_TOKEN = crypto.randomBytes(32).toString("hex");
 // dist-electron/main.js -> ../public/favicon.ico. Works in dev as-is (public/
 // is served/present at the repo root); if packaging is ever added, whatever
 // sets that up needs to make sure this file (or a platform-specific icon
@@ -31,6 +45,7 @@ let win: BrowserWindow | null = null;
 let splashWin: BrowserWindow | null = null;
 let settingsWin: BrowserWindow | null = null;
 let closeConfirmWin: BrowserWindow | null = null;
+let updateCheckWin: BrowserWindow | null = null;
 let isQuitting = false;
 // Mirrored from App.tsx (see "app:theme-state" below) -- lets
 // openCloseConfirmWindow open already in the right theme, since that
@@ -118,7 +133,7 @@ function startBackend() {
       // WINDOW_STATE_FILE/SETTINGS_FILE already use below, so plugin
       // packages live alongside this app's other per-user data instead of
       // inside the install directory.
-      env: { ...process.env, ALTERA_USER_DATA_DIR: app.getPath("userData") },
+      env: { ...process.env, ALTERA_USER_DATA_DIR: app.getPath("userData"), ALTERA_LOCAL_TOKEN: LOCAL_TOKEN },
     },
   );
   // stdio: "inherit" sends the backend's own errors to this process's
@@ -283,6 +298,39 @@ function openCloseConfirmWindow() {
     closeConfirmWin = null;
   });
   loadAppInto(closeConfirmWin, "close-confirm.html", { theme: currentTheme });
+}
+
+// File menu's "Check for Updates…" -- a small owned window (same shape as
+// openCloseConfirmWindow above), not an inline status card in Settings,
+// so checking for an update is a deliberate, visible action with its own
+// focused result instead of something tucked away in a tab.
+function openUpdateCheckWindow() {
+  if (updateCheckWin && !updateCheckWin.isDestroyed()) {
+    updateCheckWin.focus();
+    return;
+  }
+  updateCheckWin = new BrowserWindow({
+    width: 420,
+    height: 190,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    autoHideMenuBar: true,
+    parent: win ?? undefined,
+    modal: true,
+    title: "Check for Updates",
+    icon: APP_ICON,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+    },
+  });
+  updateCheckWin.once("ready-to-show", () => updateCheckWin?.show());
+  setUpSecondaryModal(updateCheckWin);
+  updateCheckWin.on("closed", () => {
+    updateCheckWin = null;
+  });
+  loadAppInto(updateCheckWin, "update-check.html", { theme: currentTheme });
 }
 
 function createWindow() {
@@ -1036,6 +1084,7 @@ function buildNativeMenu(): Menu {
         { role: "about" },
         { type: "separator" },
         { label: "Settings…", accelerator: "Cmd+,", click: () => sendMenuAction("settings") },
+        { label: "Check for Updates…", click: () => triggerUpdateCheck() },
         { type: "separator" },
         { role: "services" },
         { type: "separator" },
@@ -1050,6 +1099,11 @@ function buildNativeMenu(): Menu {
       label: "File",
       submenu: [
         { label: "Open Project…", click: () => sendMenuAction("open-project") },
+        // macOS's own built-in recent-documents list (fed by
+        // app.addRecentDocument, see addRecentProject above) -- unlike
+        // Windows/Linux's in-page MenuBar.tsx submenu, macOS has a native
+        // role for this that needs no manual list-building here.
+        { label: "Open Recent", role: "recentDocuments", submenu: [{ label: "Clear Menu", role: "clearRecentDocuments" }] },
         { label: "Save", accelerator: "Cmd+S", click: () => sendMenuAction("save-project") },
         { label: "Save As…", accelerator: "Cmd+Shift+S", click: () => sendMenuAction("save-project-as") },
         { type: "separator" },
@@ -1093,6 +1147,41 @@ if (process.platform === "darwin") {
 // PDF-path handlers above.
 const PROJECT_FILTERS = [{ name: "Altera Project", extensions: ["altera"] }];
 
+// Same userData-JSON-file convention as WINDOW_STATE_FILE/SETTINGS_FILE
+// above -- File > Open Recent (src/panels/MenuBar.tsx) reads this back via
+// recentProjects:list. Capped at 10, most-recent-first, deduplicated by
+// path. app.addRecentDocument also feeds Windows' own taskbar jump list,
+// a second, OS-level way to reach the same file.
+const RECENT_PROJECTS_FILE = path.join(app.getPath("userData"), "recent-projects.json");
+const RECENT_PROJECTS_MAX = 10;
+
+function loadRecentProjects(): string[] {
+  try {
+    const list = JSON.parse(readFileSync(RECENT_PROJECTS_FILE, "utf-8"));
+    return Array.isArray(list) ? list : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveRecentProjects(list: string[]) {
+  try {
+    writeFileSync(RECENT_PROJECTS_FILE, JSON.stringify(list));
+  } catch (err) {
+    console.error("[recent-projects] failed to save:", err);
+  }
+}
+
+function addRecentProject(filePath: string) {
+  const list = [filePath, ...loadRecentProjects().filter((p) => p !== filePath)].slice(0, RECENT_PROJECTS_MAX);
+  saveRecentProjects(list);
+  app.addRecentDocument(filePath);
+}
+
+function removeRecentProject(filePath: string) {
+  saveRecentProjects(loadRecentProjects().filter((p) => p !== filePath));
+}
+
 ipcMain.handle("project:saveAs", async (_event, jsonData: string) => {
   if (!win) return null;
   const { canceled, filePath } = await dialog.showSaveDialog(win, {
@@ -1102,11 +1191,13 @@ ipcMain.handle("project:saveAs", async (_event, jsonData: string) => {
   });
   if (canceled || !filePath) return null;
   await fs.writeFile(filePath, jsonData, "utf-8");
+  addRecentProject(filePath);
   return filePath;
 });
 
 ipcMain.handle("project:saveToPath", async (_event, filePath: string, jsonData: string) => {
   await fs.writeFile(filePath, jsonData, "utf-8");
+  addRecentProject(filePath);
   return true;
 });
 
@@ -1119,7 +1210,32 @@ ipcMain.handle("project:open", async () => {
   });
   if (canceled || !filePaths[0]) return null;
   const data = await fs.readFile(filePaths[0], "utf-8");
+  addRecentProject(filePaths[0]);
   return { path: filePaths[0], data };
+});
+
+ipcMain.handle("recentProjects:list", () => loadRecentProjects());
+
+// File > Open Recent's own entries -- same read-and-return shape as
+// project:open above (so the renderer can reuse handleOpenProject's own
+// "replace current project state" logic verbatim), but skipping the
+// dialog and going straight to a known path. A file that's since moved
+// or been deleted is pruned from the list rather than left to fail the
+// same way every time it's clicked.
+ipcMain.handle("recentProjects:open", async (_event, filePath: string) => {
+  try {
+    const data = await fs.readFile(filePath, "utf-8");
+    addRecentProject(filePath);
+    return { path: filePath, data };
+  } catch {
+    removeRecentProject(filePath);
+    return null;
+  }
+});
+
+ipcMain.on("recentProjects:clear", () => {
+  saveRecentProjects([]);
+  app.clearRecentDocuments();
 });
 
 // Plugin install/uninstall -- see backend/app/plugins.py for the loader
@@ -1216,10 +1332,143 @@ ipcMain.on("shell:openExternal", (_event, url: string) => {
   if (/^(https?:\/\/|mailto:)/i.test(url)) shell.openExternal(url);
 });
 
+// Self-hosted (package.json's build.publish: generic, pointed at
+// backend.alteradatasuite.com/updates -- see altera-license-server's own
+// /updates/{filename} + /admin/updates/publish, and this repo's
+// scripts/publish-update.mjs for how a new release actually gets there).
+// Two independent paths share these same autoUpdater events:
+//   1. A silent background check on launch (setupAutoUpdater, called from
+//      app.whenReady below) -- no UI at all unless something is actually
+//      ready to install, which gets the "Restart Now / Later" dialog.
+//   2. File > Check for Updates -- opens the small updateCheckWin popup
+//      (openUpdateCheckWindow above) and shows live status in it.
+interface UpdaterStatus {
+  state: "checking" | "available" | "not-available" | "downloading" | "downloaded" | "error";
+  version?: string;
+  percent?: number;
+  message?: string;
+}
+
+// Cached so the popup can pull the current status the moment it mounts
+// (its own request-init, same pattern as every Configure window's
+// lastPayloadByNode) instead of racing a push that might fire before its
+// listener is registered.
+let lastUpdaterStatus: UpdaterStatus | null = null;
+
+function sendUpdaterStatus(status: UpdaterStatus) {
+  lastUpdaterStatus = status;
+  if (updateCheckWin && !updateCheckWin.isDestroyed()) {
+    updateCheckWin.webContents.send("updater:status", status);
+  }
+}
+
+// electron-updater's own error text is internal/technical (e.g. "Cannot
+// find channel \"latest.yml\"" when nothing's been published yet, straight
+// from its HTTP 404 handling) -- never shown to the user as-is. A missing
+// latest.yml means "no release published," which reads the same to a user
+// as "you're already up to date," not an error; anything else collapses
+// to one plain, generic message. The real error still goes to console.
+function updaterErrorStatus(err: Error): UpdaterStatus {
+  console.error("[updater]", err);
+  const msg = err.message.toLowerCase();
+  if (msg.includes("cannot find channel") || msg.includes("404") || msg.includes("no published versions")) {
+    return { state: "not-available" };
+  }
+  return { state: "error", message: "Couldn't check for updates. Please try again later." };
+}
+
+function setupAutoUpdater() {
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on("checking-for-update", () => sendUpdaterStatus({ state: "checking" }));
+  autoUpdater.on("update-available", (info) => sendUpdaterStatus({ state: "available", version: info.version }));
+  autoUpdater.on("update-not-available", () => sendUpdaterStatus({ state: "not-available" }));
+  autoUpdater.on("download-progress", (p) => sendUpdaterStatus({ state: "downloading", percent: Math.round(p.percent) }));
+
+  autoUpdater.on("update-downloaded", (info) => {
+    sendUpdaterStatus({ state: "downloaded", version: info.version });
+    // Only for the SILENT background path -- if the popup is already open
+    // (a manual check), its own "Restart & Install" button covers this,
+    // and a second native dialog on top of it would be redundant.
+    if (updateCheckWin && !updateCheckWin.isDestroyed()) return;
+    if (!win) return;
+    dialog
+      .showMessageBox(win, {
+        type: "info",
+        title: "Update Ready",
+        message: `Altera Data Suite ${info.version} has been downloaded.`,
+        detail: "Restart now to install it, or it'll install automatically the next time you quit.",
+        buttons: ["Restart Now", "Later"],
+        defaultId: 0,
+        cancelId: 1,
+      })
+      .then(({ response }) => {
+        if (response === 0) autoUpdater.quitAndInstall();
+      });
+  });
+
+  autoUpdater.on("error", (err) => {
+    // Never a dialog for the silent background path -- an unreachable
+    // update server (or none published yet) shouldn't look like the app
+    // itself is broken. The popup (if open) still reflects it.
+    sendUpdaterStatus(updaterErrorStatus(err));
+  });
+
+  autoUpdater.checkForUpdates().catch((err) => {
+    console.error("[updater] check failed:", err);
+  });
+}
+
+// File > Check for Updates (src/panels/MenuBar.tsx on Windows/Linux, the
+// native app-name menu on macOS below) -- opens the popup and kicks off a
+// real check; the popup's own status flows back through sendUpdaterStatus
+// above. A plain function (not just an ipcMain handler) so the native
+// macOS menu item can call it directly, in-process, without a redundant
+// renderer round trip.
+function triggerUpdateCheck() {
+  openUpdateCheckWindow();
+  if (!app.isPackaged) {
+    sendUpdaterStatus({ state: "error", message: "Updates aren't available in a dev build." });
+    return;
+  }
+  sendUpdaterStatus({ state: "checking" });
+  autoUpdater.checkForUpdates().catch((err) => {
+    sendUpdaterStatus(updaterErrorStatus(err));
+  });
+}
+
+ipcMain.handle("updater:check", () => triggerUpdateCheck());
+
+ipcMain.handle("updater:request-init", () => lastUpdaterStatus);
+
+ipcMain.on("updater:install", () => {
+  autoUpdater.quitAndInstall();
+});
+
+ipcMain.on("updateCheck:close", () => {
+  updateCheckWin?.close();
+});
+
 app.whenReady().then(() => {
+  // Stamps LOCAL_TOKEN onto every outgoing request this app's own windows
+  // make to the local backend -- covers fetch, the /ws WebSocket upgrade,
+  // and plain <img src> icon loads alike, since it operates at the
+  // network layer, not per-call-site. See LOCAL_TOKEN's own comment.
+  session.defaultSession.webRequest.onBeforeSendHeaders(
+    { urls: [`http://127.0.0.1:${BACKEND_PORT}/*`] },
+    (details, callback) => {
+      callback({ requestHeaders: { ...details.requestHeaders, "X-Altera-Local-Token": LOCAL_TOKEN } });
+    },
+  );
+
   createSplashWindow();
   startBackend();
   createWindow();
+
+  // Dev/unpackaged has no installer for electron-updater to update INTO --
+  // it throws immediately otherwise.
+  if (app.isPackaged) setupAutoUpdater();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

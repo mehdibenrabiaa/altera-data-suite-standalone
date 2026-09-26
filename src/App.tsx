@@ -1633,9 +1633,11 @@ const KonvaA4Editor = () => {
     return true;
   }, [currentProjectPath, buildProjectData, handleSaveProjectAs]);
 
-  const handleOpenProject = useCallback(async () => {
-    const opened = await window.alteraStudio.openProjectDialog();
-    if (!opened) return;
+  // Shared by the File > Open… dialog and File > Open Recent (recent
+  // entries skip the dialog and hand this the same {path, data} shape
+  // directly, see handleOpenRecentProject below) -- everything below this
+  // point replaces project state wholesale regardless of how it arrived.
+  const loadOpenedProject = useCallback(async (opened: { path: string; data: string }) => {
     let data: ReturnType<typeof buildProjectData>;
     try {
       data = JSON.parse(opened.data);
@@ -1686,6 +1688,25 @@ const KonvaA4Editor = () => {
     });
     setIsDirty(false);
   }, [buildProjectData, withDirtyTrackingSuppressed]);
+
+  const handleOpenProject = useCallback(async () => {
+    const opened = await window.alteraStudio.openProjectDialog();
+    if (!opened) return;
+    await loadOpenedProject(opened);
+  }, [loadOpenedProject]);
+
+  // File > Open Recent's own entries (src/panels/MenuBar.tsx) -- main.ts's
+  // recentProjects:open already re-reads the file itself (and prunes the
+  // entry if it's since moved/been deleted, returning null), so this just
+  // needs to handle that failure case with a message.
+  const handleOpenRecentProject = useCallback(async (filePath: string) => {
+    const opened = await window.alteraStudio.openRecentProject(filePath);
+    if (!opened) {
+      alert(`Couldn't open "${filePath}" -- it may have moved or been deleted.`);
+      return;
+    }
+    await loadOpenedProject(opened);
+  }, [loadOpenedProject]);
 
   // Unsaved-changes prompt -- the actual dialog is a real native window
   // (CloseConfirmWindow.tsx, opened by electron/main.ts's
@@ -4153,12 +4174,14 @@ const KonvaA4Editor = () => {
         {!isMac && (
         <MenuBar
           onOpenProject={handleOpenProject}
+          onOpenRecentProject={handleOpenRecentProject}
           onSaveProject={handleSaveProject}
           onSaveProjectAs={handleSaveProjectAs}
           onOpenSettings={handleOpenSettings}
           onOpenExternalUrl={(url) => window.alteraStudio.openExternalUrl(url)}
           onRestart={() => window.alteraStudio.restartApp()}
           onExit={() => window.close()}
+          onCheckForUpdates={() => window.alteraStudio.checkForUpdates()}
           onUndo={handleUndo}
           onRedo={handleRedo}
           canUndo={historyRef.current.length > 0}

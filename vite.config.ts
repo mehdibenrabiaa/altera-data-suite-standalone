@@ -54,6 +54,7 @@ export default defineConfig({
         // Shared by every plugin node (src/plugins.ts) -- the one entry
         // that stays fixed no matter how many plugins get installed later.
         pluginNode: resolve(__dirname, "plugin-node.html"),
+        updateCheck: resolve(__dirname, "update-check.html"),
       },
     },
   },

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
-import { ConfigProvider, InputNumber, Select, theme as antdTheme } from "antd";
+import { ConfigProvider, Input, InputNumber, Select, theme as antdTheme } from "antd";
 import {
   DndContext,
   closestCenter,
@@ -96,6 +96,7 @@ const AGGREGATION_OPTIONS: { value: AggregateType; label: string }[] = [
   { value: "first", label: "First value" },
   { value: "last", label: "Last value" },
   { value: "nth", label: "Nth occurrence" },
+  { value: "concatenate", label: "Concatenate" },
 ];
 
 interface SortableMetricCardProps {
@@ -233,11 +234,18 @@ export default function AggregateWindow() {
     setMetrics((current) => {
       const existing = current.find((metric) => metric.column === column && metric.aggregation === aggregation);
       if (existing) return current.filter((metric) => metric.id !== existing.id);
-      return [...current, { id: `metric_${metricCounterRef.current++}`, column, aggregation, ...(aggregation === "nth" ? { occurrence: 1 } : {}) }];
+      return [...current, {
+        id: `metric_${metricCounterRef.current++}`, column, aggregation,
+        ...(aggregation === "nth" ? { occurrence: 1 } : {}),
+        ...(aggregation === "concatenate" ? { delimiter: ", " } : {}),
+      }];
     });
   }, []);
   const updateNthOccurrence = useCallback((column: string, occurrence: number) => {
     setMetrics((current) => current.map((metric) => metric.column === column && metric.aggregation === "nth" ? { ...metric, occurrence: Math.max(1, occurrence || 1) } : metric));
+  }, []);
+  const updateConcatenateDelimiter = useCallback((column: string, delimiter: string) => {
+    setMetrics((current) => current.map((metric) => metric.column === column && metric.aggregation === "concatenate" ? { ...metric, delimiter } : metric));
   }, []);
 
   const metricIds = useMemo(() => metrics.map((m) => m.id), [metrics]);
@@ -262,6 +270,7 @@ export default function AggregateWindow() {
     const activeColumn = selectedColumn || columns[0] || "";
     const activeAggregations = new Set(metrics.filter((metric) => metric.column === activeColumn).map((metric) => metric.aggregation));
     const nthMetric = metrics.find((metric) => metric.column === activeColumn && metric.aggregation === "nth");
+    const concatenateMetric = metrics.find((metric) => metric.column === activeColumn && metric.aggregation === "concatenate");
 
     return (
       <ConfigProvider theme={buildAntTheme(payload.theme)}>
@@ -321,6 +330,16 @@ export default function AggregateWindow() {
                     <div className="cleaner-param-row group-by-nth-control">
                       <span className="cleaner-param-label">Occurrence:</span>
                       <InputNumber min={1} value={nthMetric?.occurrence ?? 1} onChange={(value) => updateNthOccurrence(activeColumn, value ?? 1)} />
+                    </div>
+                  )}
+                  {activeAggregations.has("concatenate") && (
+                    <div className="cleaner-param-row group-by-nth-control">
+                      <span className="cleaner-param-label">Delimiter:</span>
+                      <Input
+                        value={concatenateMetric?.delimiter ?? ", "}
+                        onChange={(event) => updateConcatenateDelimiter(activeColumn, event.target.value)}
+                        style={{ width: 100 }}
+                      />
                     </div>
                   )}
                 </div>

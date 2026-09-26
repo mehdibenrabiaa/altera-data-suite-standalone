@@ -16,6 +16,19 @@ contextBridge.exposeInMainWorld("alteraStudio", {
   saveProjectToPath: (filePath: string, jsonData: string): Promise<boolean> =>
     ipcRenderer.invoke("project:saveToPath", filePath, jsonData),
   openProjectDialog: (): Promise<{ path: string; data: string } | null> => ipcRenderer.invoke("project:open"),
+
+  // File > Open Recent (src/panels/MenuBar.tsx) -- listRecentProjects for
+  // the submenu's own contents, openRecentProject returning the same
+  // {path, data} shape openProjectDialog does so App.tsx's
+  // handleOpenProject can reuse its existing "replace project state"
+  // logic for either source.
+  listRecentProjects: (): Promise<string[]> => ipcRenderer.invoke("recentProjects:list"),
+  openRecentProject: (filePath: string): Promise<{ path: string; data: string } | null> =>
+    ipcRenderer.invoke("recentProjects:open", filePath),
+  clearRecentProjects: (): void => {
+    ipcRenderer.send("recentProjects:clear");
+  },
+
   restartApp: (): void => {
     ipcRenderer.send("app:restart");
   },
@@ -682,6 +695,29 @@ contextBridge.exposeInMainWorld("alteraStudio", {
   // success. See electron/main.ts's plugin:install/plugin:uninstall.
   installPlugin: (): Promise<string | null> => ipcRenderer.invoke("plugin:install"),
   uninstallPlugin: (pluginId: string): Promise<string | null> => ipcRenderer.invoke("plugin:uninstall", pluginId),
+
+  // File > Check for Updates (src/panels/MenuBar.tsx) -- checkForUpdates
+  // opens the small update-check popup and kicks off a real check; its
+  // own UpdateCheckWindow.tsx pulls the current status via
+  // requestUpdaterStatus on mount, then follows onUpdaterStatus pushes
+  // (same path a silent background check on launch also uses, see
+  // main.ts's sendUpdaterStatus). installUpdate restarts into whatever
+  // was already downloaded.
+  checkForUpdates: (): void => {
+    ipcRenderer.invoke("updater:check");
+  },
+  requestUpdaterStatus: (): Promise<unknown> => ipcRenderer.invoke("updater:request-init"),
+  onUpdaterStatus: (cb: (status: unknown) => void): (() => void) => {
+    const listener = (_event: unknown, status: unknown) => cb(status);
+    ipcRenderer.on("updater:status", listener);
+    return () => ipcRenderer.removeListener("updater:status", listener);
+  },
+  installUpdate: (): void => {
+    ipcRenderer.send("updater:install");
+  },
+  closeUpdateCheckWindow: (): void => {
+    ipcRenderer.send("updateCheck:close");
+  },
 
   // Main window: closes whichever kept-alive window (Configure or Browse)
   // is currently showing this node, if any -- called once per deleted

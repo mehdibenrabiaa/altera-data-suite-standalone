@@ -280,12 +280,22 @@ def sort_rows(dfs: list[pd.DataFrame], params: dict[str, Any]) -> tuple[pd.DataF
 _AGGREGATE_LABELS = {
     "sum": "Sum", "average": "Average", "count": "Count", "min": "Min", "max": "Max",
     "first": "First value", "last": "Last value", "nth": "Nth occurrence",
+    "concatenate": "Concatenate",
 }
 _NUMERIC_AGGREGATIONS = {"sum", "average", "count", "min", "max"}
 
 
 def _is_non_blank(value: Any) -> bool:
     return not pd.isna(value) and str(value).strip() != ""
+
+
+# Group By's own most common ask beyond the plain numeric/first-last-nth
+# metrics above: joining every value in a group into one string (Power
+# Query's "Group rows"/Text.Combine, SQL's STRING_AGG/GROUP_CONCAT). Blank
+# values are skipped the same way every other text-producing aggregation
+# here already does, not joined in as empty segments.
+def _concatenate_values(values: Any, delimiter: str) -> str:
+    return delimiter.join(str(v) for v in values if _is_non_blank(v))
 
 
 def _nth_occurrence(metric: dict[str, Any]) -> int:
@@ -334,6 +344,8 @@ def aggregate_columns(dfs: list[pd.DataFrame], params: dict[str, Any]) -> tuple[
             else:
                 occurrence = _nth_occurrence(m)
                 result_value = str(non_blank[occurrence - 1]) if len(non_blank) >= occurrence else ""
+        elif agg == "concatenate":
+            result_value = _concatenate_values(column_values, m.get("delimiter") or ", ")
         else:
             numeric = [n for n in (_to_number_or_none(v) for v in column_values) if n is not None]
             if not numeric:
@@ -408,6 +420,9 @@ def group_by(dfs: list[pd.DataFrame], params: dict[str, Any]) -> tuple[pd.DataFr
                 else:
                     occurrence = _nth_occurrence(metric)
                     values.append(str(non_blank[occurrence - 1]) if len(non_blank) >= occurrence else "")
+                continue
+            if aggregation == "concatenate":
+                values.append(_concatenate_values(series, metric.get("delimiter") or ", "))
                 continue
             numeric = [number for number in (_to_number_or_none(value) for value in series) if number is not None]
             if not numeric:

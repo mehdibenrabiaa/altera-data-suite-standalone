@@ -5729,3 +5729,17 @@ body.dock-dragging .dock-style-canvas-dock-panel {
   display: flex;
   gap: 8px;
 }
+
+.update-check-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+.update-check-status-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+  display: flex;
+}

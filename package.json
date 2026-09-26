@@ -9,7 +9,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "dist:win": "npm run build && electron-builder --win"
+    "dist:win": "npm run build && electron-builder --win",
+    "publish:update": "node scripts/publish-update.mjs"
   },
   "dependencies": {
     "@ant-design/icons": "^6.1.0",
@@ -20,6 +21,7 @@
     "ag-grid-community": "^36.1.0",
     "ag-grid-react": "^36.1.0",
     "antd": "^6.2.0",
+    "electron-updater": "^6.3.9",
     "konva": "^10.0.12",
     "pdfjs-dist": "^3.11.174",
     "rc-dock": "^3.3.2",
@@ -71,6 +73,10 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
+    },
+    "publish": {
+      "provider": "generic",
+      "url": "https://backend.alteradatasuite.com/updates"
     }
   }
 }

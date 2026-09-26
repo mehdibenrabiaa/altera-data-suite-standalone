@@ -36,14 +36,23 @@ function PlayGlyph() {
     </svg>
   );
 }
+// File > Open Recent shows just the filename (the full path is the
+// item's title/tooltip instead) -- Windows paths, so split on both slash
+// styles rather than assuming backslash.
+function projectFileName(filePath: string): string {
+  return filePath.split(/[\\/]/).pop() ?? filePath;
+}
+
 interface MenuBarProps {
   onOpenProject: () => void;
+  onOpenRecentProject: (filePath: string) => void;
   onSaveProject: () => void;
   onSaveProjectAs: () => void;
   onOpenSettings: () => void;
   onOpenExternalUrl: (url: string) => void;
   onRestart: () => void;
   onExit: () => void;
+  onCheckForUpdates: () => void;
   onUndo: () => void;
   onRedo: () => void;
   canUndo: boolean;
@@ -64,12 +73,14 @@ type OpenMenu = "file" | "edit" | "help" | null;
 
 export default function MenuBar({
   onOpenProject,
+  onOpenRecentProject,
   onSaveProject,
   onSaveProjectAs,
   onOpenSettings,
   onOpenExternalUrl,
   onRestart,
   onExit,
+  onCheckForUpdates,
   onUndo,
   onRedo,
   canUndo,
@@ -84,6 +95,15 @@ export default function MenuBar({
 }: MenuBarProps) {
   const [openMenu, setOpenMenu] = useState<OpenMenu>(null);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
+
+  // Re-fetched every time the File menu opens (not just once on mount) so
+  // a project saved/opened elsewhere in the same session shows up without
+  // needing a push channel for something this low-stakes.
+  const [recentProjects, setRecentProjects] = useState<string[]>([]);
+  useEffect(() => {
+    if (openMenu !== "file" || !window.alteraStudio) return;
+    window.alteraStudio.listRecentProjects().then(setRecentProjects);
+  }, [openMenu]);
 
   useEffect(() => {
     if (!openMenu) return;
@@ -133,6 +153,31 @@ export default function MenuBar({
             <div className="ctx-menu-item" onClick={() => runAndClose(onOpenProject)}>
               <span>Open Project…</span>
             </div>
+            {recentProjects.length > 0 && (
+              <>
+                <div className="ctx-menu-divider" />
+                {recentProjects.slice(0, 5).map((filePath) => (
+                  <div
+                    key={filePath}
+                    className="ctx-menu-item"
+                    title={filePath}
+                    onClick={() => runAndClose(() => onOpenRecentProject(filePath))}
+                  >
+                    <span>{projectFileName(filePath)}</span>
+                  </div>
+                ))}
+                <div
+                  className="ctx-menu-item"
+                  onClick={() => runAndClose(() => {
+                    window.alteraStudio.clearRecentProjects();
+                    setRecentProjects([]);
+                  })}
+                >
+                  <span>Clear Recent</span>
+                </div>
+              </>
+            )}
+            <div className="ctx-menu-divider" />
             <div className="ctx-menu-item" onClick={() => runAndClose(onSaveProject)}>
               <span>Save</span>
               <span className="ctx-menu-shortcut">Ctrl+S</span>
@@ -145,6 +190,9 @@ export default function MenuBar({
             <div className="ctx-menu-item" onClick={() => runAndClose(onOpenSettings)}>
               <span>Settings</span>
               <span className="ctx-menu-shortcut">Ctrl+,</span>
+            </div>
+            <div className="ctx-menu-item" onClick={() => runAndClose(onCheckForUpdates)}>
+              <span>Check for Updates…</span>
             </div>
             <div className="ctx-menu-divider" />
             <div className="ctx-menu-item" onClick={() => runAndClose(onRestart)}>

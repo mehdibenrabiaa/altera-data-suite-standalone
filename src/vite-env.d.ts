@@ -178,6 +178,14 @@ export interface PluginNodeAppliedPayload {
   nodeId: string;
   params: Record<string, unknown>;
 }
+// Mirrors electron/main.ts's own UpdaterStatus -- pushed on both a
+// background (startup) and a manual (About tab button) update check.
+export interface UpdaterStatus {
+  state: "checking" | "available" | "not-available" | "downloading" | "downloaded" | "error";
+  version?: string;
+  percent?: number;
+  message?: string;
+}
 export interface AggregateWindowPayload {
   nodeId: string;
   nodeName: string;
@@ -381,6 +389,9 @@ declare global {
       saveProjectAs: (jsonData: string) => Promise<string | null>;
       saveProjectToPath: (filePath: string, jsonData: string) => Promise<boolean>;
       openProjectDialog: () => Promise<{ path: string; data: string } | null>;
+      listRecentProjects: () => Promise<string[]>;
+      openRecentProject: (filePath: string) => Promise<{ path: string; data: string } | null>;
+      clearRecentProjects: () => void;
       restartApp: () => void;
       quitApp: () => void;
       onMenuAction: (cb: (action: string) => void) => () => void;
@@ -704,6 +715,15 @@ declare global {
       // the backend has finished its own /plugins/reload.
       installPlugin: () => Promise<string | null>;
       uninstallPlugin: (pluginId: string) => Promise<string | null>;
+
+      // File > Check for Updates (src/panels/MenuBar.tsx) -- opens the
+      // small update-check popup (src/UpdateCheckWindow.tsx). See
+      // electron/main.ts's setupAutoUpdater/sendUpdaterStatus.
+      checkForUpdates: () => void;
+      requestUpdaterStatus: () => Promise<UpdaterStatus | null>;
+      onUpdaterStatus: (cb: (status: UpdaterStatus) => void) => () => void;
+      installUpdate: () => void;
+      closeUpdateCheckWindow: () => void;
 
       // Main window: closes whichever kept-alive per-node window
       // (Configure, Browse, Header Promoter, Merge, Shift Columns,
